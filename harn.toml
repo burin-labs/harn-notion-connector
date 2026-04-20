@@ -1,0 +1,14 @@
+[package]
+name = "harn-notion-connector"
+version = "0.0.0"
+description = "Pure-Harn Notion trigger connector: webhooks, polling, and outbound API dispatch."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/burin-labs/harn-notion-connector"
+
+[exports]
+default = "src/lib.harn"
+
+# Until package management v0 (harn#345) lands, develop locally with the
+# sibling path import. After #345, replace with a versioned git URL.
+[dependencies]
+notion-sdk-harn = { path = "../notion-sdk-harn" }
