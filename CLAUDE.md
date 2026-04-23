@@ -11,20 +11,21 @@ upstream tickets, and the v0 milestones.
 - Entry point: `src/lib.harn`.
 - Tests live under `tests/`. Recorded webhook fixtures live under
   `tests/fixtures/webhooks/`.
-- Sibling SDK at `/Users/ksinder/projects/notion-sdk-harn/` — imported
-  for outbound calls.
+- SDK dependency: `notion-sdk-harn`, resolved by `harn install`.
 
 ## How to test
 
-Until `harn add` ships
-([harn#345](https://github.com/burin-labs/harn/issues/345)):
+Install the pinned Harn CLI from crates.io and run the local gate:
 
 ```sh
-cd /Users/ksinder/projects/harn
-cargo run --quiet --bin harn -- run /Users/ksinder/projects/harn-notion-connector/tests/normalize_smoke.harn
-cargo run --quiet --bin harn -- check /Users/ksinder/projects/harn-notion-connector/src/lib.harn
-cargo run --quiet --bin harn -- lint  /Users/ksinder/projects/harn-notion-connector/src/lib.harn
-cargo run --quiet --bin harn -- fmt --check /Users/ksinder/projects/harn-notion-connector/src/lib.harn
+cargo install harn-cli --version "$(cat .harn-version)" --locked
+harn install
+harn check src
+harn lint src
+harn fmt --check src tests
+for test in tests/*.harn; do
+  harn run "$test" || exit 1
+done
 ```
 
 ## Reference Rust impl

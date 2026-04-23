@@ -8,7 +8,7 @@ repository = "https://github.com/burin-labs/harn-notion-connector"
 [exports]
 default = "src/lib.harn"
 
-# Until package management v0 (harn#345) lands, develop locally with the
-# sibling path import. After #345, replace with a versioned git URL.
+# Publishable dependencies must be git-backed so this package resolves from a
+# clean consumer project without a sibling checkout.
 [dependencies]
-notion-sdk-harn = { path = "../notion-sdk-harn" }
+notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", branch = "ksinder/issue-445-package-ci" }
