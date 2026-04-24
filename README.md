@@ -17,14 +17,11 @@ surface.
 
 ## Install
 
-Once Harn package management v0
-([harn#345](https://github.com/burin-labs/harn/issues/345)) lands:
-
 ```sh
-harn add github.com/burin-labs/harn-notion-connector@v0.1.0
+harn add github.com/burin-labs/harn-notion-connector@main
 ```
 
-Until then, depend on this repo via a path import:
+For local multi-repo development, a path dependency is still useful:
 
 ```toml
 [dependencies]
@@ -34,7 +31,7 @@ harn-notion-connector = { path = "../harn-notion-connector" }
 ## Usage
 
 ```harn
-import notion_connector from "harn-notion-connector"
+import notion_connector from "harn-notion-connector/default"
 
 trigger watch_database on notion {
   source = { kind: "webhook", database_id: env("NOTION_DATABASE_ID") }
@@ -54,6 +51,19 @@ The connector exports the standard Harn Connector interface:
 
 This repo is being built out by Claude Code sessions following a structured
 prompt. **Read [SESSION_PROMPT.md](./SESSION_PROMPT.md) before making changes.**
+
+Install the pinned Harn CLI from crates.io and resolve package dependencies:
+
+```sh
+cargo install harn-cli --version "$(cat .harn-version)" --locked
+harn install
+harn check src
+harn lint src
+harn fmt --check src tests
+for test in tests/*.harn; do
+  harn run "$test" || exit 1
+done
+```
 
 ## License
 

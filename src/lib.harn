@@ -1,0 +1,73 @@
+import "notion-sdk-harn/default"
+
+let NOTION_PROVIDER_ID = "notion"
+
+/** Return this connector's Harn provider id. */
+pub fn provider_id() {
+  return NOTION_PROVIDER_ID
+}
+
+/** Return trigger kinds supported by this connector package. */
+pub fn kinds() {
+  return ["webhook", "poll"]
+}
+
+/** Return the canonical normalized Notion event payload schema. */
+pub fn payload_schema() {
+  return {
+    name: "NotionEventPayload",
+    type: "object",
+    required: ["provider", "event", "raw"],
+    properties: {
+    provider: {type: "string"},
+    event: {type: "string"},
+    resource_id: {type: ["string", "null"]},
+    raw: {type: "object"},
+  },
+  }
+}
+
+/** Initialize connector state with orchestrator context. */
+pub fn init(ctx = nil) {
+  return {provider: NOTION_PROVIDER_ID, initialized: true, ctx: ctx ?? {}}
+}
+
+/** Activate Notion webhook or polling bindings. */
+pub fn activate(bindings = []) {
+  return {provider: NOTION_PROVIDER_ID, bindings: len(bindings ?? [])}
+}
+
+/** Shut down connector state. */
+pub fn shutdown() {
+  return {provider: NOTION_PROVIDER_ID, shutdown: true}
+}
+
+/** Normalize a raw Notion webhook envelope into the connector event shape. */
+pub fn normalize_inbound(raw) {
+  let payload = raw?.payload ?? {}
+  let entity = payload?.entity ?? raw?.entity ?? {}
+  return {
+    provider: NOTION_PROVIDER_ID,
+    event: payload?.type ?? raw?.type ?? "unknown",
+    resource_id: entity?.id,
+    raw: raw,
+  }
+}
+
+/** Polling is a no-op until Notion delta state is wired into the orchestrator. */
+pub fn poll_tick(ctx = nil) {
+  return {provider: NOTION_PROVIDER_ID, events: [], ctx: ctx ?? {}}
+}
+
+/**
+ * Dispatch outbound Notion API calls. Full dispatch delegates to notion-sdk-harn after auth wiring lands.
+ */
+pub fn call(method, args = {}) {
+  return {
+    ok: false,
+    code: "not_implemented",
+    message: "harn-notion-connector outbound method `" + method + "` is not implemented yet",
+    method: method,
+    args: args ?? {},
+  }
+}
