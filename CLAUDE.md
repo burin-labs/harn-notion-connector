@@ -11,14 +11,21 @@
 
 ## How to test
 
-Install the pinned Harn CLI from crates.io and run the local gate:
+Install the pinned Harn CLI from crates.io:
 
 ```sh
 cargo install harn-cli --version "$(cat .harn-version)" --locked
+harn --version
+```
+
+Run the local CI equivalent:
+
+```sh
 harn install
-harn check src
-harn lint src
-harn fmt --check src tests
+harn check src/lib.harn
+harn lint src/lib.harn
+harn fmt --check src/lib.harn tests/*.harn
+harn connector check .
 for test in tests/*.harn; do
   harn run "$test" || exit 1
 done

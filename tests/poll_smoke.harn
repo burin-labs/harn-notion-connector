@@ -1,0 +1,57 @@
+import { activate, init, poll_tick, shutdown } from "../src/lib"
+
+pipeline default() {
+  shutdown()
+  init({api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"})
+  activate(
+    [
+    {
+    id: "notion.poll",
+    kind: "poll",
+    poll: {
+    resource: "data_source",
+    data_source_id: "ds_123",
+    page_size: 2,
+    high_water_mark: "last_edited_time",
+  },
+    api_token: "secret_api",
+  },
+  ],
+  )
+  http_mock_clear()
+  let base = "https://notion.test/v1"
+  http_mock(
+    "POST",
+    base + "/data_sources/ds_123/query",
+    {
+    responses: [
+    {
+    status: 200,
+    body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_1\",\"last_edited_time\":\"2026-04-19T10:00:00Z\",\"parent\":{\"database_id\":\"ds_123\"}}],\"has_more\":false,\"next_cursor\":null}",
+    headers: {},
+  },
+    {
+    status: 200,
+    body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_1\",\"last_edited_time\":\"2026-04-19T10:00:00Z\",\"parent\":{\"database_id\":\"ds_123\"}},{\"id\":\"page_2\",\"last_edited_time\":\"2026-04-19T10:05:00Z\",\"parent\":{\"database_id\":\"ds_123\"}}],\"has_more\":false,\"next_cursor\":null}",
+    headers: {},
+  },
+  ],
+  },
+  )
+  let first = poll_tick()
+  assert_eq(len(first), 1, "first tick emits one page")
+  assert_eq(first[0].event_type, "page.content_updated", "poll event type")
+  assert_eq(first[0].resource_id, "page_1", "poll resource id")
+  assert_eq(first[0].occurred_at, "2026-04-19T10:00:00Z", "poll occurred_at")
+  let second = poll_tick()
+  assert_eq(len(second), 1, "second tick emits only changed/new pages")
+  assert_eq(second[0].resource_id, "page_2", "second tick new page id")
+  let calls = http_mock_calls()
+  assert_eq(len(calls), 2, "one Notion query per tick")
+  assert(
+    json_parse(calls[1].body).filter.last_edited_time.after == "2026-04-19T10:00:00Z",
+    "second tick advances cursor",
+  )
+  http_mock_clear()
+  shutdown()
+}
