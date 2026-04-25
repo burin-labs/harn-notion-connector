@@ -52,3 +52,13 @@ metadata = { verification_token = "contract-fixture-secret" }
 expect_type = "event"
 expect_kind = "comment.created"
 expect_event_count = 1
+
+[[connector_contract.fixtures]]
+provider = "notion"
+name = "subscription verification"
+kind = "webhook"
+headers = { "content-type" = "application/json" }
+body = '''{"verification_token":"verify-token","type":"subscription.verification","id":"verification_1"}'''
+expect_type = "event"
+expect_kind = "subscription.verification"
+expect_event_count = 1

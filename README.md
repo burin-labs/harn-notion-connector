@@ -54,7 +54,27 @@ trigger watch_database on notion {
 The connector exports the standard Harn Connector interface:
 `provider_id()`, `kinds()`, `payload_schema()`, `init(ctx)`,
 `activate(bindings)`, `shutdown()`, `normalize_inbound(raw)`,
-`call(method, args)`, and (optionally) `poll_tick()`.
+`call(method, args)`, and `poll_tick(ctx)`.
+
+## Polling Fallback
+
+Use a `kind = "poll"` Notion binding when webhooks are unavailable or as a
+fallback watcher. Harn owns the schedule, lease, cursor, and connector state;
+the connector only reads `ctx.cursor` / `ctx.state` and returns the next
+`{ events, cursor, state }`.
+
+```toml
+provider = "notion"
+kind = "poll"
+handler = "on_notion_page_change"
+poll = { interval = "5m", jitter = "30s", state_key = "notion:workspace:tasks", max_batch_size = 50, resource = "data_source", data_source_id = "$NOTION_DATA_SOURCE_ID", high_water_mark = "last_edited_time", page_size = 50 }
+secrets = { api_token = "notion/api-token" }
+```
+
+`poll.interval` may also be supplied as `interval_ms` or `interval_secs`.
+`state_key` can be written as `cursor_state_key`; it chooses the durable Harn
+cursor/state slot shared across ticks. The returned poll events use the same
+normalized payload shape and dedupe key as webhook-ingested Notion events.
 
 ## Configuration
 
@@ -149,7 +169,7 @@ harn install
 harn check src/lib.harn
 harn lint src/lib.harn
 harn fmt --check src/lib.harn tests/*.harn
-harn connector check .
+harn connector check . --provider notion --run-poll-tick
 for test in tests/*.harn; do
   harn run "$test" || exit 1
 done

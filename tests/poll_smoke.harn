@@ -1,23 +1,50 @@
-import { activate, init, poll_tick, shutdown } from "../src/lib"
+import { init, poll_tick, shutdown } from "../src/lib"
 
-pipeline default() {
-  shutdown()
-  init({api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"})
-  activate(
-    [
-    {
+fn poll_ctx(cursor = nil, state = nil, extra = nil) {
+  return {
+    provider_id: "notion",
+    binding_id: "notion.poll",
+    tick_at: "2026-04-19T11:00:00Z",
+    cursor: cursor,
+    state: state,
+    state_key: "notion:ds_123",
+    lease: {id: "lease-test", tenant_id: "tenant-test"},
+    max_batch_size: 10,
+    binding: {
     id: "notion.poll",
     kind: "poll",
+    config: {
     poll: {
     resource: "data_source",
     data_source_id: "ds_123",
     page_size: 2,
     high_water_mark: "last_edited_time",
+    state_key: "notion:ds_123",
   },
     api_token: "secret_api",
   },
-  ],
-  )
+  },
+  }
+    + extra ?? {}
+}
+
+fn page(id, edited_at, parent_id = "ds_123") {
+  return {
+    object: "page",
+    id: id,
+    last_edited_time: edited_at,
+    last_edited_by: {object: "user", id: "user_ada", name: "Ada"},
+    parent: {database_id: parent_id},
+  }
+}
+
+fn list_body(results, has_more = false, next_cursor = nil) {
+  return json_stringify({object: "list", results: results, has_more: has_more, next_cursor: next_cursor})
+}
+
+pipeline default() {
+  shutdown()
+  init({api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"})
   http_mock_clear()
   let base = "https://notion.test/v1"
   http_mock(
@@ -25,37 +52,94 @@ pipeline default() {
     base + "/data_sources/ds_123/query",
     {
     responses: [
+    {status: 200, body: list_body([page("page_1", "2026-04-19T10:00:00Z")]), headers: {}},
+    {status: 200, body: list_body([page("page_2", "2026-04-19T10:05:00Z")]), headers: {}},
+    {
+    status: 503,
+    body: "{\"object\":\"error\",\"code\":\"service_unavailable\",\"message\":\"try again\"}",
+    headers: {},
+  },
+    {status: 200, body: list_body([page("page_3", "2026-04-19T10:10:00Z")]), headers: {}},
+  ],
+  },
+  )
+  let first = poll_tick(poll_ctx())
+  assert_eq(len(first.events), 1, "first tick emits one normalized event")
+  assert_eq(first.events[0].kind, "page.content_updated", "poll event kind")
+  assert_eq(first.events[0].payload.event_type, "page.content_updated", "payload event type")
+  assert_eq(first.events[0].payload.resource_id, "page_1", "poll resource id")
+  assert_eq(first.events[0].payload.parent_id, "ds_123", "poll parent id")
+  assert_eq(first.events[0].payload.actor.id, "user_ada", "poll actor id")
+  assert_eq(first.events[0].occurred_at, "2026-04-19T10:00:00Z", "poll occurred_at")
+  assert_eq(
+    first.events[0].dedupe_key,
+    "notion:page.content_updated:page_1:2026-04-19T10:00:00Z",
+    "poll dedupe key matches normalized event identity",
+  )
+  assert_eq(first.cursor.last_edited_time, "2026-04-19T10:00:00Z", "first tick advances cursor")
+  assert(first.state.poll_cache.get("notion.poll:page_1") != nil, "first tick persists page snapshot")
+  let second = poll_tick(poll_ctx(first.cursor, first.state))
+  assert_eq(len(second.events), 1, "second tick emits only changed/new pages")
+  assert_eq(second.events[0].payload.resource_id, "page_2", "second tick new page id")
+  assert_eq(second.cursor.last_edited_time, "2026-04-19T10:05:00Z", "second tick advances cursor")
+  let failed = poll_tick(poll_ctx(second.cursor, second.state))
+  assert(is_err(failed), "retryable Notion failures return Err without advancing local state")
+  assert_eq(unwrap_err(failed).code, "service_unavailable", "retry error preserves Notion code")
+  let retried = poll_tick(poll_ctx(second.cursor, second.state))
+  assert_eq(len(retried.events), 1, "retry with same cursor can emit after transient failure")
+  assert_eq(retried.events[0].payload.resource_id, "page_3", "retry emits next page")
+  let calls = http_mock_calls()
+  assert_eq(len(calls), 4, "one Notion query per tick")
+  assert_eq(json_parse(calls[0].body).filter, nil, "first tick has no high-water filter")
+  assert_eq(
+    json_parse(calls[1].body).filter.last_edited_time.after,
+    "2026-04-19T10:00:00Z",
+    "second tick uses Harn-managed cursor",
+  )
+  assert_eq(
+    json_parse(calls[3].body).filter.last_edited_time.after,
+    "2026-04-19T10:05:00Z",
+    "retry uses unchanged cursor from failed tick",
+  )
+  http_mock_clear()
+  http_mock(
+    "POST",
+    base + "/data_sources/ds_123/query",
+    {status: 200, body: list_body([page("page_1", "2026-04-19T10:00:00Z")]), headers: {}},
+  )
+  let duplicate = poll_tick(poll_ctx(nil, first.state))
+  assert_eq(len(duplicate.events), 0, "persisted state dedupes identical page snapshots")
+  assert_eq(
+    duplicate.cursor.last_edited_time,
+    "2026-04-19T10:00:00Z",
+    "duplicate-only tick can safely advance cursor",
+  )
+  http_mock_clear()
+  http_mock(
+    "POST",
+    base + "/data_sources/ds_123/query",
+    {
+    responses: [
     {
     status: 200,
-    body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_1\",\"last_edited_time\":\"2026-04-19T10:00:00Z\",\"parent\":{\"database_id\":\"ds_123\"}}],\"has_more\":false,\"next_cursor\":null}",
+    body: list_body([page("page_a", "2026-04-19T10:20:00Z"), page("page_b", "2026-04-19T10:25:00Z")]),
     headers: {},
   },
     {
     status: 200,
-    body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_1\",\"last_edited_time\":\"2026-04-19T10:00:00Z\",\"parent\":{\"database_id\":\"ds_123\"}},{\"id\":\"page_2\",\"last_edited_time\":\"2026-04-19T10:05:00Z\",\"parent\":{\"database_id\":\"ds_123\"}}],\"has_more\":false,\"next_cursor\":null}",
+    body: list_body([page("page_a", "2026-04-19T10:20:00Z"), page("page_b", "2026-04-19T10:25:00Z")]),
     headers: {},
   },
   ],
   },
   )
-  let first = poll_tick()
-  assert_eq(len(first), 1, "first tick emits one page")
-  assert_eq(first[0].provider, "notion", "poll provider")
-  assert_eq(first[0].event, "page.content_updated", "poll provider payload event")
-  assert_eq(first[0].event_type, "page.content_updated", "poll event type")
-  assert_eq(first[0].entity_id, "page_1", "poll entity id")
-  assert_eq(first[0].entity_type, "page", "poll entity type")
-  assert_eq(first[0].resource_id, "page_1", "poll resource id")
-  assert_eq(first[0].occurred_at, "2026-04-19T10:00:00Z", "poll occurred_at")
-  let second = poll_tick()
-  assert_eq(len(second), 1, "second tick emits only changed/new pages")
-  assert_eq(second[0].resource_id, "page_2", "second tick new page id")
-  let calls = http_mock_calls()
-  assert_eq(len(calls), 2, "one Notion query per tick")
-  assert(
-    json_parse(calls[1].body).filter.last_edited_time.after == "2026-04-19T10:00:00Z",
-    "second tick advances cursor",
-  )
+  let capped = poll_tick(poll_ctx(nil, nil, {max_batch_size: 1}))
+  assert_eq(len(capped.events), 1, "max_batch_size caps emitted events")
+  assert_eq(capped.events[0].payload.resource_id, "page_a", "capped tick emits first event")
+  assert_eq(capped.cursor, nil, "capped tick leaves cursor unchanged for retry-safe draining")
+  let drained = poll_tick(poll_ctx(capped.cursor, capped.state, {max_batch_size: 1}))
+  assert_eq(len(drained.events), 1, "next capped tick drains the next uncached event")
+  assert_eq(drained.events[0].payload.resource_id, "page_b", "drained tick emits second event")
   http_mock_clear()
   shutdown()
 }

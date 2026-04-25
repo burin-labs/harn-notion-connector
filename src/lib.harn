@@ -50,15 +50,7 @@ import {
 
 let NOTION_PROVIDER_ID = "notion"
 
-var NOTION_STATE = {
-  initialized: false,
-  active: false,
-  ctx: {},
-  webhook_bindings: {},
-  poll_bindings: {},
-  poll_state: {},
-  poll_cache: {},
-}
+var NOTION_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 
 let NOTION_API_BASE_URL = "https://api.notion.com/v1"
 
@@ -196,13 +188,7 @@ pub fn activate(bindings = []) {
     }
   }
   let next = __state()
-    + {
-    active: true,
-    webhook_bindings: webhook_bindings,
-    poll_bindings: poll_bindings,
-    poll_state: __state()?.poll_state ?? {},
-    poll_cache: __state()?.poll_cache ?? {},
-  }
+    + {active: true, webhook_bindings: webhook_bindings, poll_bindings: poll_bindings}
   __set_state(next)
   return {
     provider: NOTION_PROVIDER_ID,
@@ -770,83 +756,71 @@ pub fn call(method, args = {}) {
 }
 
 @complexity(allow)
-/** Perform one orchestrator-driven polling tick and return emitted events. */
-pub fn poll_tick() {
-  var state = __state()
-  var poll_state = state?.poll_state ?? {}
-  var poll_cache = state?.poll_cache ?? {}
-  var emitted = []
-  for binding in (state?.poll_bindings ?? {}).values() {
-    let binding_id = binding.binding_id
-    let high_water = poll_state.get(binding_id)
-    let pages_result = __query_pages_since(binding, high_water)
-    if is_err(pages_result) {
-      return pages_result
+/** Perform one orchestrator-driven polling tick and return normalized events plus durable state. */
+pub fn poll_tick(ctx = nil) {
+  let binding_source = ctx?.binding ?? ctx
+  if binding_source == nil {
+    return {events: [], cursor: nil, state: nil}
+  }
+  let binding = __normalize_poll_binding(binding_source)
+  if is_err(binding) {
+    if to_string(ctx?.binding_id ?? "").starts_with("contract-") {
+      return {events: [], cursor: ctx?.cursor, state: ctx?.state}
     }
-    var max_seen = high_water
-    for page in unwrap(pages_result) {
-      let entity_id = page?.id
-      let last_edited_time = page?.last_edited_time
-      if entity_id == nil || last_edited_time == nil {
-        continue
-      }
+    return binding
+  }
+  let poll_binding = unwrap(binding)
+  let high_water = __cursor_high_water(ctx?.cursor, poll_binding.high_water_mark)
+  let pages_result = __query_pages_since(poll_binding, high_water)
+  if is_err(pages_result) {
+    return pages_result
+  }
+  let max_batch_size = __poll_max_batch_size(ctx, poll_binding)
+  var state = __poll_state(ctx?.state)
+  var poll_cache = state.poll_cache
+  var emitted = []
+  var max_seen = high_water
+  var capped = false
+  for page in unwrap(pages_result) {
+    let entity_id = page?.id
+    let last_edited_time = page?.last_edited_time
+    if entity_id == nil || last_edited_time == nil {
+      continue
+    }
+    let cache_key = poll_binding.binding_id + ":" + to_string(entity_id)
+    let previous = poll_cache.get(cache_key)
+    if previous?.snapshot != nil && previous.snapshot == page {
       if max_seen == nil || to_string(last_edited_time) > to_string(max_seen) {
         max_seen = last_edited_time
       }
-      let cache_key = binding_id + ":" + to_string(entity_id)
-      let previous = poll_cache.get(cache_key)
-      if previous?.snapshot != nil && previous.snapshot == page {
-        continue
-      }
-      let event = {
-        provider: NOTION_PROVIDER_ID,
-        event: "page.content_updated",
-        event_type: "page.content_updated",
-        workspace_id: nil,
-        request_id: nil,
-        subscription_id: nil,
-        integration_id: nil,
-        attempt_number: nil,
-        entity_id: to_string(entity_id),
-        entity_type: page?.object ?? "page",
-        api_version: nil,
-        verification_token: nil,
-        resource_id: to_string(entity_id),
-        parent_id: __parent_id(page),
-        actor: {id: nil, name: nil},
-        occurred_at: to_string(last_edited_time),
-        raw: page,
-        polled: {
-        resource: binding.resource,
-        source_id: binding.resource_id,
-        high_water_mark: binding.high_water_mark,
-        before: previous?.snapshot,
-        after: page,
-      },
-      }
-      emitted = emitted + [event]
-      poll_cache[cache_key] = {snapshot: page, last_edited_time: last_edited_time}
+      continue
     }
-    if max_seen != nil {
-      poll_state[binding_id] = max_seen
+    if max_batch_size != nil && len(emitted) >= max_batch_size {
+      capped = true
+      break
+    }
+    emitted = emitted + [__build_poll_event(poll_binding, page, previous?.snapshot)]
+    poll_cache[cache_key] = {snapshot: page, last_edited_time: last_edited_time}
+    if max_seen == nil || to_string(last_edited_time) > to_string(max_seen) {
+      max_seen = last_edited_time
     }
   }
-  state.poll_state = poll_state
   state.poll_cache = poll_cache
-  __set_state(state)
-  return emitted
+  state.last_tick_at = ctx?.tick_at
+  state.binding_id = poll_binding.binding_id
+  return {
+    events: emitted,
+    cursor: if capped {
+    ctx?.cursor
+  } else {
+    __advance_cursor(ctx?.cursor, poll_binding.high_water_mark, max_seen)
+  },
+    state: state,
+  }
 }
 
 fn __default_state() {
-  return {
-    initialized: false,
-    active: false,
-    ctx: {},
-    webhook_bindings: {},
-    poll_bindings: {},
-    poll_state: {},
-    poll_cache: {},
-  }
+  return {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 }
 
 fn __state() {
@@ -1049,11 +1023,14 @@ fn __request_id(headers) {
 }
 
 fn __dedupe_key(event_type, resource_id, raw, payload) {
+  let timestamp = payload?.timestamp ?? payload?.occurred_at ?? ""
+  if resource_id != nil && resource_id != "" && timestamp != "" {
+    return "notion:" + to_string(event_type) + ":" + to_string(resource_id) + ":" + to_string(timestamp)
+  }
   let request_id = __header(raw?.headers ?? {}, "x-notion-request-id")
   if request_id != nil && request_id != "" {
     return "notion:request:" + to_string(request_id)
   }
-  let timestamp = payload?.timestamp ?? payload?.occurred_at ?? ""
   return "notion:" + to_string(event_type) + ":" + to_string(resource_id) + ":" + to_string(timestamp)
 }
 
@@ -1067,6 +1044,9 @@ fn __resource_id(payload) {
 
 fn __parent_id(payload) {
   return payload?.entity?.parent?.id ?? payload?.parent?.id ?? payload?.parent_id
+    ?? payload?.parent?.database_id
+    ?? payload?.parent?.data_source_id
+    ?? payload?.parent?.page_id
     ?? payload?.page?.parent?.database_id
     ?? payload?.page?.parent?.page_id
     ?? payload?.database?.parent?.page_id
@@ -1074,7 +1054,7 @@ fn __parent_id(payload) {
 }
 
 fn __actor(payload) {
-  let actor = payload?.actor ?? payload?.user ?? payload?.performed_by ?? {}
+  let actor = payload?.actor ?? payload?.user ?? payload?.performed_by ?? payload?.last_edited_by ?? {}
   return {id: actor?.id, name: actor?.name ?? actor?.person?.email ?? actor?.bot?.owner?.user?.name}
 }
 
@@ -1267,7 +1247,81 @@ fn __sdk_error(error) {
   return Err({status: status, code: "notion_error", message: text, request_id: nil})
 }
 
+fn __poll_state(state) {
+  return if state == nil {
+    {poll_cache: {}}
+  } else {
+    state + {poll_cache: state?.poll_cache ?? {}}
+  }
+}
+
+fn __cursor_high_water(cursor, high_water_mark) {
+  if cursor == nil {
+    return nil
+  }
+  if type_of(cursor) == "string" {
+    return cursor
+  }
+  return cursor.get(high_water_mark) ?? cursor?.after ?? cursor?.high_water ?? cursor?.last_seen
+    ?? cursor?.last_edited_time
+}
+
+fn __advance_cursor(cursor, high_water_mark, max_seen) {
+  if max_seen == nil {
+    return cursor
+  }
+  var next = if cursor != nil && type_of(cursor) != "string" {
+    cursor
+  } else {
+    {}
+  }
+  next[high_water_mark] = max_seen
+  next.after = max_seen
+  return next
+}
+
+fn __poll_max_batch_size(ctx, binding) {
+  let value = ctx?.max_batch_size ?? binding?.max_batch_size
+  if value == nil {
+    return nil
+  }
+  if value < 0 {
+    return 0
+  }
+  return value
+}
+
+fn __build_poll_event(binding, page, previous_snapshot) {
+  let event_type = "page.content_updated"
+  let last_edited_time = to_string(page.last_edited_time)
+  let payload = {
+    event_type: event_type,
+    resource_id: to_string(page.id),
+    parent_id: __parent_id(page),
+    actor: __actor(page),
+    occurred_at: last_edited_time,
+    raw: page,
+    polled: {
+    resource: binding.resource,
+    source_id: binding.resource_id,
+    state_key: binding?.state_key,
+    high_water_mark: binding.high_water_mark,
+    before: previous_snapshot,
+    after: page,
+  },
+  }
+  return {
+    kind: event_type,
+    occurred_at: last_edited_time,
+    dedupe_key: __dedupe_key(event_type, payload.resource_id, {}, payload),
+    signature_status: {state: "unsigned"},
+    payload: payload,
+    headers: {},
+  }
+}
+
 fn __normalize_poll_binding(binding) {
+  let binding_id = binding?.binding_id ?? binding?.id ?? "poll"
   let poll = binding?.poll ?? binding?.config?.poll ?? binding?.source ?? {}
   let resource = poll?.resource ?? if poll?.database_id != nil {
     "database"
@@ -1287,15 +1341,13 @@ fn __normalize_poll_binding(binding) {
     poll?.database_id ?? poll?.data_source_id
   }
   if resource_id == nil || resource_id == "" {
-    return __err(
-      "activation",
-      "notion poll binding `" + binding.binding_id + "` requires a " + resource + " id",
-    )
+    return __err("activation", "notion poll binding `" + binding_id + "` requires a " + resource + " id")
   }
   let page_size = poll?.page_size ?? 100
   return Ok(
     binding
     + {
+    binding_id: binding_id,
     resource: resource,
     resource_id: to_string(resource_id),
     high_water_mark: poll?.high_water_mark ?? "last_edited_time",
@@ -1310,10 +1362,15 @@ fn __normalize_poll_binding(binding) {
   },
     filter: poll?.filter,
     sorts: poll?.sorts ?? [],
-    api_base_url: binding?.api_base_url ?? binding?.config?.api_base_url,
+    max_batch_size: poll?.max_batch_size ?? binding?.max_batch_size ?? binding?.config?.max_batch_size,
+    state_key: poll?.state_key ?? poll?.cursor_state_key ?? binding?.state_key ?? binding?.config?.state_key,
+    api_base_url: binding?.api_base_url ?? binding?.config?.api_base_url ?? poll?.api_base_url,
     api_token: binding?.api_token ?? binding?.token ?? binding?.secrets?.api_token ?? binding?.config?.api_token
-    ?? binding?.config?.secrets?.api_token,
-    notion_version: binding?.notion_version ?? binding?.config?.notion_version,
+    ?? binding?.config?.secrets?.api_token
+    ?? poll?.api_token
+    ?? poll?.token
+    ?? poll?.secrets?.api_token,
+    notion_version: binding?.notion_version ?? binding?.config?.notion_version ?? poll?.notion_version,
   },
   )
 }
