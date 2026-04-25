@@ -1,9 +1,5 @@
 # CLAUDE.md — harn-notion-connector
 
-**Read [SESSION_PROMPT.md](./SESSION_PROMPT.md) first.** It contains the
-pivot context, the connector interface contract, what's blocked on
-upstream tickets, and the v0 milestones.
-
 ## Quick repo conventions
 
 - File extension: `.harn`. Use `snake_case` for filenames.
