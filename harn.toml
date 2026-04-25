@@ -16,3 +16,39 @@ connector = { harn = "src/lib.harn" }
 # clean consumer project without a sibling checkout.
 [dependencies]
 notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", branch = "main" }
+
+[connector_contract]
+version = 1
+
+[[connector_contract.fixtures]]
+provider = "notion"
+name = "page content updated webhook"
+kind = "webhook"
+body = '''{"id":"evt_page_1","timestamp":"2026-04-19T12:34:56Z","type":"page.content_updated","workspace_id":"ws_test","subscription_id":"sub_test","integration_id":"int_test","actor":{"id":"user_ada","name":"Ada Lovelace"},"entity":{"id":"page_alpha","type":"page","parent":{"id":"database_tasks","type":"database"}}}'''
+headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=cdfabcb5e43424d5d9e8696f5200643aad42bb8e8716e3ca08dd3e2e2bf19abc", "request-id" = "req_page_1" }
+metadata = { verification_token = "contract-fixture-secret" }
+expect_type = "event"
+expect_kind = "page.content_updated"
+expect_event_count = 1
+
+[[connector_contract.fixtures]]
+provider = "notion"
+name = "database created webhook"
+kind = "webhook"
+body = '''{"id":"evt_database_1","timestamp":"2026-04-19T12:35:56Z","type":"database.created","workspace_id":"ws_test","subscription_id":"sub_test","actor":{"id":"user_grace","name":"Grace Hopper"},"entity":{"id":"database_projects","type":"database","parent":{"id":"page_home","type":"page"}}}'''
+headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=e845e38241ba965f88590fe259cad15c49875b8ba787e82136eed9dfafd934f8", "request-id" = "req_database_1" }
+metadata = { verification_token = "contract-fixture-secret" }
+expect_type = "event"
+expect_kind = "database.created"
+expect_event_count = 1
+
+[[connector_contract.fixtures]]
+provider = "notion"
+name = "comment created webhook"
+kind = "webhook"
+body = '''{"id":"evt_comment_1","timestamp":"2026-04-19T12:36:56Z","type":"comment.created","workspace_id":"ws_test","subscription_id":"sub_test","actor":{"id":"user_katherine","name":"Katherine Johnson"},"entity":{"id":"comment_delta","type":"comment","parent":{"id":"page_alpha","type":"page"}}}'''
+headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=93cdf3345ecbe853d0530bfcf5d774256362d178f83c8cf7a1751767148d4390", "request-id" = "req_comment_1" }
+metadata = { verification_token = "contract-fixture-secret" }
+expect_type = "event"
+expect_kind = "comment.created"
+expect_event_count = 1
