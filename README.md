@@ -56,6 +56,83 @@ The connector exports the standard Harn Connector interface:
 `activate(bindings)`, `shutdown()`, `normalize_inbound(raw)`,
 `call(method, args)`, and (optionally) `poll_tick()`.
 
+## Configuration
+
+### Required Secrets
+
+For inbound webhooks, store the Notion webhook `verification_token` captured
+during subscription verification and pass it through the trigger binding as
+`secrets.verification_token`:
+
+```toml
+[[triggers]]
+id = "notion.webhook"
+provider = "notion"
+kind = "webhook"
+handler = "handlers/notion.handle"
+
+[triggers.match]
+path = "/hooks/notion"
+
+[triggers.secrets]
+verification_token = "notion/verification-token"
+```
+
+For outbound calls and polling, store a Notion internal integration token or
+OAuth access token and pass it as `api_token`, `token`, or
+`secrets.api_token`. The connector also reads `NOTION_TOKEN` for local
+development.
+
+```harn
+init({
+  api_token: env("NOTION_TOKEN"),
+  notion_version: "2026-03-11",
+})
+```
+
+### Notion Capabilities
+
+Grant the minimum Notion capabilities for the methods you call. The common MVP
+set is:
+
+- `Read content` for retrieving blocks, pages, databases, data sources, search,
+  views, polling queries, and markdown reads.
+- `Insert content` for creating pages, databases, data sources, blocks, file
+  uploads, and views.
+- `Update content` for updating pages, blocks, databases, data sources, views,
+  moving pages, and markdown updates.
+- `Read comments` for listing or retrieving comments.
+- `Insert comments` for creating, updating, or deleting comments.
+- User information access when calling `users.*` methods or when workflows need
+  actor names/emails.
+
+See Notion's official docs for
+[integration capabilities](https://developers.notion.com/reference/capabilities),
+[webhook verification](https://developers.notion.com/reference/webhooks), and
+[comments capabilities](https://developers.notion.com/guides/data-apis/working-with-comments).
+
+### Local Webhook Testing
+
+Use `normalize_inbound(raw)` with the exact raw body text received by your HTTP
+listener. Signature verification is computed over `raw.body_text`; parsed JSON
+alone is intentionally rejected for signed webhook events.
+
+```harn
+let raw = {
+  verification_token: env("NOTION_VERIFICATION_TOKEN"),
+  body_text: read_file("tests/fixtures/webhooks/page_content_updated.json"),
+  headers: {
+    ["x-notion-signature"]: "sha256=...",
+    ["request-id"]: "req_local",
+  },
+}
+let result = notion_connector.normalize_inbound(raw)
+```
+
+The package also declares `[[connector_contract.fixtures]]` in `harn.toml`.
+`harn connector check .` runs those signed fixtures through the same
+`normalize_inbound` adapter used by Harn connector hosts.
+
 ## Development
 
 Install the pinned Harn CLI from crates.io:

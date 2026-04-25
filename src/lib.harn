@@ -129,10 +129,21 @@ pub fn payload_schema() {
     harn_schema_name: "NotionEventPayload",
     json_schema: {
     type: "object",
-    required: ["event_type", "resource_id", "actor", "occurred_at", "raw"],
+    required: ["provider", "event", "event_type", "resource_id", "raw"],
     additionalProperties: true,
     properties: {
+    provider: {const: "notion"},
+    event: {type: "string"},
     event_type: {type: "string"},
+    workspace_id: {type: ["string", "null"]},
+    request_id: {type: ["string", "null"]},
+    subscription_id: {type: ["string", "null"]},
+    integration_id: {type: ["string", "null"]},
+    attempt_number: {type: ["integer", "null"]},
+    entity_id: {type: ["string", "null"]},
+    entity_type: {type: ["string", "null"]},
+    api_version: {type: ["string", "null"]},
+    verification_token: {type: ["string", "null"]},
     resource_id: {type: "string"},
     parent_id: {type: ["string", "null"]},
     actor: {
@@ -141,6 +152,7 @@ pub fn payload_schema() {
     properties: {id: {type: ["string", "null"]}, name: {type: ["string", "null"]}},
   },
     occurred_at: {type: ["string", "null"]},
+    polled: {type: ["object", "null"]},
     raw: {type: "object"},
   },
   },
@@ -787,7 +799,18 @@ pub fn poll_tick() {
         continue
       }
       let event = {
+        provider: NOTION_PROVIDER_ID,
+        event: "page.content_updated",
         event_type: "page.content_updated",
+        workspace_id: nil,
+        request_id: nil,
+        subscription_id: nil,
+        integration_id: nil,
+        attempt_number: nil,
+        entity_id: to_string(entity_id),
+        entity_type: page?.object ?? "page",
+        api_version: nil,
+        verification_token: nil,
         resource_id: to_string(entity_id),
         parent_id: __parent_id(page),
         actor: {id: nil, name: nil},
@@ -907,6 +930,11 @@ fn __signing_secret(raw) {
     ?? raw?.config?.signing_secret
     ?? raw?.secrets?.verification_token
     ?? raw?.secrets?.signing_secret
+    ?? raw?.metadata?.verification_token
+    ?? raw?.metadata?.signing_secret
+    ?? raw?.metadata?.secret
+    ?? raw?.metadata?.secrets?.verification_token
+    ?? raw?.metadata?.secrets?.signing_secret
   if direct != nil && trim(to_string(direct)) != "" {
     return to_string(direct)
   }
@@ -949,12 +977,32 @@ fn __verify_notion_signature(raw, headers, body_text) {
 }
 
 fn __normalize_event(event_type, payload, raw) {
+  let headers = raw?.headers ?? {}
+  let resource_id = __resource_id(payload)
+  let entity_type = payload?.entity?.type ?? payload?.page?.object ?? payload?.database?.object
+    ?? payload?.data_source?.object
   return {
+    provider: NOTION_PROVIDER_ID,
+    event: to_string(event_type),
     event_type: to_string(event_type),
-    resource_id: __resource_id(payload),
+    workspace_id: payload?.workspace_id,
+    request_id: __request_id(headers),
+    subscription_id: payload?.subscription_id,
+    integration_id: payload?.integration_id,
+    attempt_number: payload?.attempt_number,
+    entity_id: if resource_id == "" {
+    nil
+  } else {
+    resource_id
+  },
+    entity_type: entity_type,
+    api_version: payload?.api_version,
+    verification_token: payload?.verification_token,
+    resource_id: resource_id,
     parent_id: __parent_id(payload),
     actor: __actor(payload),
     occurred_at: payload?.timestamp ?? payload?.occurred_at ?? raw?.received_at,
+    polled: nil,
     raw: payload,
   }
 }
@@ -963,17 +1011,41 @@ fn __build_event(event_type, payload, raw, signature_status) {
   let normalized_payload = __normalize_event(event_type, payload, raw)
   let occurred_at = normalized_payload.occurred_at
   let resource_id = normalized_payload.resource_id
+  let headers = __event_headers(raw?.headers ?? {})
   return {
     kind: to_string(event_type),
     occurred_at: occurred_at,
     dedupe_key: __dedupe_key(event_type, resource_id, raw, payload),
-    signature_status: signature_status,
+    signature_status: {state: signature_status},
     payload: normalized_payload,
-    headers: {
-    ["x-notion-signature"]: __header(raw?.headers ?? {}, "x-notion-signature"),
-    ["x-notion-request-id"]: __header(raw?.headers ?? {}, "x-notion-request-id"),
-  },
+    headers: headers,
   }
+}
+
+fn __event_headers(raw_headers) {
+  var headers = {}
+  let signature = __header(raw_headers, "x-notion-signature")
+  if signature != nil {
+    headers["x-notion-signature"] = signature
+  }
+  let notion_request_id = __header(raw_headers, "x-notion-request-id")
+  if notion_request_id != nil {
+    headers["x-notion-request-id"] = notion_request_id
+  }
+  let request_id = __header(raw_headers, "request-id")
+  if request_id != nil {
+    headers["request-id"] = request_id
+  }
+  let x_request_id = __header(raw_headers, "x-request-id")
+  if x_request_id != nil {
+    headers["x-request-id"] = x_request_id
+  }
+  return headers
+}
+
+fn __request_id(headers) {
+  return __header(headers, "request-id") ?? __header(headers, "x-request-id")
+    ?? __header(headers, "x-notion-request-id")
 }
 
 fn __dedupe_key(event_type, resource_id, raw, payload) {
