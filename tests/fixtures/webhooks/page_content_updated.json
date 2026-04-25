@@ -1,0 +1,20 @@
+{
+  "id": "evt_page_1",
+  "timestamp": "2026-04-19T12:34:56Z",
+  "type": "page.content_updated",
+  "workspace_id": "ws_test",
+  "subscription_id": "sub_test",
+  "integration_id": "int_test",
+  "actor": {
+    "id": "user_ada",
+    "name": "Ada Lovelace"
+  },
+  "entity": {
+    "id": "page_alpha",
+    "type": "page",
+    "parent": {
+      "id": "database_tasks",
+      "type": "database"
+    }
+  }
+}

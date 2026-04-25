@@ -1,0 +1,19 @@
+{
+  "id": "evt_database_1",
+  "timestamp": "2026-04-19T12:35:56Z",
+  "type": "database.created",
+  "workspace_id": "ws_test",
+  "subscription_id": "sub_test",
+  "actor": {
+    "id": "user_grace",
+    "name": "Grace Hopper"
+  },
+  "entity": {
+    "id": "database_projects",
+    "type": "database",
+    "parent": {
+      "id": "page_home",
+      "type": "page"
+    }
+  }
+}

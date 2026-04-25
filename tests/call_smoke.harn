@@ -1,0 +1,69 @@
+import { call, init, shutdown } from "../src/lib"
+
+pipeline default() {
+  shutdown()
+  init(
+    {api_token: "secret_api", api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"},
+  )
+  http_mock_clear()
+  let base = "https://notion.test/v1"
+  http_mock(
+    "*",
+    base + "/*",
+    {
+    responses: [
+    {
+    status: 200,
+    body: "{\"object\":\"page\",\"id\":\"page_123\"}",
+    headers: {["x-request-id"]: "req_page"},
+  },
+    {
+    status: 200,
+    body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_a\"}],\"has_more\":false}",
+    headers: {},
+  },
+    {status: 200, body: "{\"object\":\"page\",\"id\":\"page_new\"}", headers: {}},
+    {status: 200, body: "{\"object\":\"block\",\"id\":\"block_1\"}", headers: {}},
+    {status: 200, body: "{\"object\":\"list\",\"results\":[],\"has_more\":false}", headers: {}},
+    {status: 200, body: "{\"object\":\"comment\",\"id\":\"comment_1\"}", headers: {}},
+  ],
+  },
+  )
+  let page = call("pages.retrieve", {page_id: "page_123"})
+  assert_eq(page.id, "page_123", "pages.retrieve response")
+  let query = call("databases.query", {database_id: "db_123", page_size: 10})
+  assert_eq(query.object, "list", "databases.query response")
+  call("pages.create", {parent: {database_id: "db_123"}, properties: {Name: {title: []}}})
+  call("blocks.children.append", {block_id: "page_123", children: []})
+  call("search.query", {query: "task"})
+  call("comments.create", {parent: {page_id: "page_123"}, rich_text: []})
+  let calls = http_mock_calls()
+  assert_eq(len(calls), 6, "all expected outbound methods dispatched")
+  assert_eq(calls[0].method, "GET", "retrieve uses GET")
+  assert_eq(calls[0].url, base + "/pages/page_123", "retrieve URL")
+  assert_eq(calls[0].headers.Authorization, "Bearer secret_api", "authorization header")
+  assert_eq(calls[0].headers.get("Notion-Version"), "2026-03-11", "notion version header")
+  assert_eq(calls[1].method, "POST", "query uses POST")
+  assert_eq(calls[1].url, base + "/databases/db_123/query", "database query URL")
+  assert_eq(json_parse(calls[1].body).page_size, 10, "query body page size")
+  assert_eq(calls[3].url, base + "/blocks/page_123/children", "append children URL")
+  http_mock_clear()
+  http_mock(
+    "GET",
+    base + "/pages/missing",
+    {
+    status: 404,
+    body: "{\"object\":\"error\",\"code\":\"object_not_found\",\"message\":\"missing page\"}",
+    headers: {["x-request-id"]: "req_404"},
+  },
+  )
+  let missing = call("pages.retrieve", {page_id: "missing"})
+  assert(is_err(missing), "non-2xx response becomes Err")
+  assert_eq(unwrap_err(missing).code, "object_not_found", "NotionError code")
+  assert_eq(unwrap_err(missing).status, 404, "NotionError status")
+  let unsupported = call("workspaces.retrieve", {workspace_id: "workspace_1"})
+  assert(is_err(unsupported), "unsupported method rejected")
+  assert_eq(unwrap_err(unsupported).code, "method_not_found", "unsupported method code")
+  http_mock_clear()
+  shutdown()
+}

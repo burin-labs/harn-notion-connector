@@ -1,4 +1,5 @@
 .harn/
+.harn-cli/
 .harn-runs/
 target/
 node_modules/

@@ -1,0 +1,64 @@
+import { normalize_inbound, shutdown } from "../src/lib"
+import {
+  assert_notion_interface,
+  fixture_body,
+  fixture_raw,
+  notion_headers,
+  signed_raw,
+} from "./helpers"
+
+pipeline default() {
+  let secret = "test-verification-token"
+  assert_notion_interface()
+  let page = normalize_inbound(fixture_raw("page_content_updated", secret))
+  assert_eq(page.type, "event", "page envelope type")
+  assert_eq(page.event.kind, "page.content_updated", "page event kind")
+  assert_eq(page.event.signature_status, "verified", "page signed")
+  assert_eq(page.event.payload.event_type, "page.content_updated", "page event type")
+  assert_eq(page.event.payload.resource_id, "page_alpha", "page resource id")
+  assert_eq(page.event.payload.parent_id, "database_tasks", "page parent id")
+  assert_eq(page.event.payload.actor.id, "user_ada", "page actor id")
+  assert_eq(page.event.payload.occurred_at, "2026-04-19T12:34:56Z", "page occurred_at")
+  assert(page.event.dedupe_key != "" && page.event.dedupe_key != nil, "page dedupe key populated")
+  let database = normalize_inbound(fixture_raw("database_created", secret))
+  assert_eq(database.event.kind, "database.created", "database event kind")
+  assert_eq(database.event.payload.resource_id, "database_projects", "database resource id")
+  assert_eq(database.event.payload.parent_id, "page_home", "database parent id")
+  let comment = normalize_inbound(fixture_raw("comment_created", secret))
+  assert_eq(comment.event.kind, "comment.created", "comment event kind")
+  assert_eq(comment.event.payload.resource_id, "comment_delta", "comment resource id")
+  assert_eq(comment.event.payload.parent_id, "page_alpha", "comment parent id")
+  let event_body = fixture_body("page_content_updated")
+  let tampered = normalize_inbound(
+    {
+    verification_token: secret,
+    body_text: event_body + " ",
+    headers: notion_headers(secret, event_body),
+  },
+  )
+  assert_eq(tampered.type, "reject", "tampered body rejects")
+  assert_eq(tampered.reject.status, 401, "tampered body status")
+  let missing_signature = normalize_inbound({verification_token: secret, body_text: event_body, headers: {}})
+  assert_eq(missing_signature.type, "reject", "missing signature rejects")
+  let wrong_length = normalize_inbound(
+    {verification_token: secret, body_text: event_body, headers: {["x-notion-signature"]: "sha256=abc"}},
+  )
+  assert_eq(wrong_length.type, "reject", "wrong length signature rejects")
+  let wrong_secret = normalize_inbound(
+    {
+    verification_token: "wrong-secret",
+    body_text: event_body,
+    headers: notion_headers(secret, event_body),
+  },
+  )
+  assert_eq(wrong_secret.type, "reject", "wrong secret rejects")
+  shutdown()
+  let missing_secret = normalize_inbound({body_text: event_body, headers: notion_headers(secret, event_body)})
+  assert_eq(missing_secret.type, "reject", "missing secret rejects")
+  let source = read_file(source_dir() + "/../src/lib.harn")
+  assert(
+    source.contains("constant_time_eq(expected, provided)"),
+    "signature comparison uses constant_time_eq",
+  )
+  shutdown()
+}

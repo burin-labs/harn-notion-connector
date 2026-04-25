@@ -1,0 +1,59 @@
+import {
+  activate,
+  init,
+  kinds,
+  normalize_inbound,
+  payload_schema,
+  provider_id,
+  shutdown,
+} from "../src/lib"
+
+pub fn notion_headers(secret, body) {
+  return {["x-notion-signature"]: "sha256=" + hmac_sha256(secret, body)}
+}
+
+pub fn signed_raw(secret, body, extra = nil) {
+  return {
+    verification_token: secret,
+    body_text: body,
+    headers: notion_headers(secret, body),
+    received_at: "2026-04-19T12:40:00Z",
+  }
+    + extra ?? {}
+}
+
+pub fn fixture_body(name) {
+  return read_file(source_dir() + "/fixtures/webhooks/" + name + ".json")
+}
+
+pub fn fixture_raw(name, secret, extra = nil) {
+  return signed_raw(secret, fixture_body(name), extra)
+}
+
+pub fn assert_notion_interface() {
+  shutdown()
+  assert_eq(provider_id(), "notion", "provider id")
+  assert_eq(kinds(), ["webhook", "poll"], "supported kinds")
+  assert_eq(payload_schema().harn_schema_name, "NotionEventPayload", "payload schema name")
+  let initialized = init({verification_token: "test-secret", api_token: "secret_api"})
+  assert(initialized.initialized == true, "init stores state")
+  let activated = activate(
+    [
+    {
+    id: "notion.webhook",
+    kind: "webhook",
+    path: "/hooks/notion",
+    secrets: {verification_token: "test-secret"},
+  },
+    {
+    id: "notion.poll",
+    kind: "poll",
+    poll: {resource: "data_source", data_source_id: "ds_123", high_water_mark: "last_edited_time"},
+    api_token: "secret_api",
+  },
+  ],
+  )
+  assert_eq(activated.bindings, 2, "activate counts bindings")
+  assert_eq(activated.webhook_bindings, 1, "activate counts webhook bindings")
+  assert_eq(activated.poll_bindings, 1, "activate counts poll bindings")
+}

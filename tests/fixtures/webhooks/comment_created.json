@@ -1,0 +1,19 @@
+{
+  "id": "evt_comment_1",
+  "timestamp": "2026-04-19T12:36:56Z",
+  "type": "comment.created",
+  "workspace_id": "ws_test",
+  "subscription_id": "sub_test",
+  "actor": {
+    "id": "user_katherine",
+    "name": "Katherine Johnson"
+  },
+  "entity": {
+    "id": "comment_delta",
+    "type": "comment",
+    "parent": {
+      "id": "page_alpha",
+      "type": "page"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+import { call, init, shutdown } from "../src/lib"
+
+pipeline default() {
+  shutdown()
+  init(
+    {api_token: "secret_api", api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"},
+  )
+  http_mock_clear()
+  let base = "https://notion.test/v1"
+  http_mock(
+    "*",
+    base + "/*",
+    {
+    responses: [
+    {status: 200, body: "{\"object\":\"data_source\",\"id\":\"ds_123\"}", headers: {}},
+    {
+    status: 200,
+    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
+    headers: {},
+  },
+    {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}", headers: {}},
+    {
+    status: 200,
+    body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
+    headers: {},
+  },
+    {
+    status: 200,
+    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
+    headers: {},
+  },
+    {
+    status: 200,
+    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"deleted\":true}",
+    headers: {},
+  },
+  ],
+  },
+  )
+  let data_source = call("data_sources.retrieve", {data_source_id: "ds_123"})
+  assert_eq(data_source.object, "data_source", "retrieve data source object")
+  assert_eq(data_source.id, "ds_123", "retrieve data source id")
+  let view_query = call("views.queries.create", {view_id: "view_123", page_size: 50})
+  assert_eq(view_query.object, "view_query", "create view query object")
+  assert_eq(view_query.id, "query_123", "create view query id")
+  let view = call("views.retrieve", {view_id: "view_123"})
+  assert_eq(view.object, "view", "retrieve view object")
+  let views = call("views.list", {data_source_id: "ds_123"})
+  assert_eq(views.results[0].id, "view_123", "list views result")
+  let results = call("views.queries.results", {view_id: "view_123", query_id: "query_123", page_size: 50})
+  assert_eq(results.results[0].id, "page_123", "view query results")
+  let deleted = call("views.queries.delete", {view_id: "view_123", query_id: "query_123"})
+  assert_eq(deleted.deleted, true, "delete view query")
+  let calls = http_mock_calls()
+  assert_eq(calls[0].url, base + "/data_sources/ds_123", "retrieve data source URL")
+  assert_eq(calls[0].headers.get("Notion-Version"), "2026-03-11", "latest Notion version header")
+  assert_eq(calls[1].url, base + "/views/view_123/queries", "create view query URL")
+  assert_eq(json_parse(calls[1].body).page_size, 50, "create view query body")
+  assert_eq(calls[2].url, base + "/views/view_123", "retrieve view URL")
+  assert(calls[3].url.contains("/views?"), "list views URL has query string")
+  assert_eq(
+    calls[4].url,
+    base + "/views/view_123/queries/query_123?page_size=50",
+    "view query results URL",
+  )
+  assert_eq(calls[5].method, "DELETE", "delete view query method")
+  http_mock_clear()
+  shutdown()
+}

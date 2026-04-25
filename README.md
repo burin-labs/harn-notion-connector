@@ -17,11 +17,13 @@ surface.
 
 ## Install
 
+With Harn 0.7.39 or newer:
+
 ```sh
 harn add github.com/burin-labs/harn-notion-connector@main
 ```
 
-For local multi-repo development, a path dependency is still useful:
+For local development, depend on this checkout via a path import:
 
 ```toml
 [dependencies]
@@ -34,9 +36,16 @@ harn-notion-connector = { path = "../harn-notion-connector" }
 import notion_connector from "harn-notion-connector/default"
 
 trigger watch_database on notion {
-  source = { kind: "webhook", database_id: env("NOTION_DATABASE_ID") }
+  source = {
+    kind: "webhook",
+    database_id: env("NOTION_DATABASE_ID"),
+    verification_token: env("NOTION_VERIFICATION_TOKEN"),
+  }
   on event {
-    let page = notion_connector.call("pages.retrieve", { page_id: event.page_id })
+    let page = notion_connector.call("pages.retrieve", {
+      page_id: event.resource_id,
+      api_token: env("NOTION_TOKEN"),
+    })
     println("Updated: ${page.properties.Title.title[0].plain_text}")
   }
 }
@@ -49,14 +58,21 @@ The connector exports the standard Harn Connector interface:
 
 ## Development
 
-Install the pinned Harn CLI from crates.io and resolve package dependencies:
+Install the pinned Harn CLI from crates.io:
 
 ```sh
 cargo install harn-cli --version "$(cat .harn-version)" --locked
+harn --version
+```
+
+Run the local CI equivalent from this repo:
+
+```sh
 harn install
-harn check src
-harn lint src
-harn fmt --check src tests
+harn check src/lib.harn
+harn lint src/lib.harn
+harn fmt --check src/lib.harn tests/*.harn
+harn connector check .
 for test in tests/*.harn; do
   harn run "$test" || exit 1
 done
