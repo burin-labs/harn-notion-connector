@@ -53,7 +53,7 @@ pipeline default() {
   assert_eq(deleted.deleted, true, "delete view query")
   let calls = http_mock_calls()
   assert_eq(calls[0].url, base + "/data_sources/ds_123", "retrieve data source URL")
-  assert_eq(calls[0].headers.get("Notion-Version"), "2026-03-11", "latest Notion version header")
+  assert_eq(calls[0].headers.get("notion-version"), "2026-03-11", "latest Notion version header")
   assert_eq(calls[1].url, base + "/views/view_123/queries", "create view query URL")
   assert_eq(json_parse(calls[1].body).page_size, 50, "create view query body")
   assert_eq(calls[2].url, base + "/views/view_123", "retrieve view URL")
