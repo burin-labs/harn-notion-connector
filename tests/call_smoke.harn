@@ -11,23 +11,23 @@ pipeline default() {
     "*",
     base + "/*",
     {
-    responses: [
-    {
-    status: 200,
-    body: "{\"object\":\"page\",\"id\":\"page_123\"}",
-    headers: {["x-request-id"]: "req_page"},
-  },
-    {
-    status: 200,
-    body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_a\"}],\"has_more\":false}",
-    headers: {},
-  },
-    {status: 200, body: "{\"object\":\"page\",\"id\":\"page_new\"}", headers: {}},
-    {status: 200, body: "{\"object\":\"block\",\"id\":\"block_1\"}", headers: {}},
-    {status: 200, body: "{\"object\":\"list\",\"results\":[],\"has_more\":false}", headers: {}},
-    {status: 200, body: "{\"object\":\"comment\",\"id\":\"comment_1\"}", headers: {}},
-  ],
-  },
+      responses: [
+        {
+          status: 200,
+          body: "{\"object\":\"page\",\"id\":\"page_123\"}",
+          headers: {["x-request-id"]: "req_page"},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"list\",\"results\":[{\"id\":\"page_a\"}],\"has_more\":false}",
+          headers: {},
+        },
+        {status: 200, body: "{\"object\":\"page\",\"id\":\"page_new\"}", headers: {}},
+        {status: 200, body: "{\"object\":\"block\",\"id\":\"block_1\"}", headers: {}},
+        {status: 200, body: "{\"object\":\"list\",\"results\":[],\"has_more\":false}", headers: {}},
+        {status: 200, body: "{\"object\":\"comment\",\"id\":\"comment_1\"}", headers: {}},
+      ],
+    },
   )
   let page = call("pages.retrieve", {page_id: "page_123"})
   assert_eq(page.id, "page_123", "pages.retrieve response")
@@ -52,10 +52,10 @@ pipeline default() {
     "GET",
     base + "/pages/missing",
     {
-    status: 404,
-    body: "{\"object\":\"error\",\"code\":\"object_not_found\",\"message\":\"missing page\"}",
-    headers: {["x-request-id"]: "req_404"},
-  },
+      status: 404,
+      body: "{\"object\":\"error\",\"code\":\"object_not_found\",\"message\":\"missing page\"}",
+      headers: {["x-request-id"]: "req_404"},
+    },
   )
   let missing = call("pages.retrieve", {page_id: "missing"})
   assert(is_err(missing), "non-2xx response becomes Err")

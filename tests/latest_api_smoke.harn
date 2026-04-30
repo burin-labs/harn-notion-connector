@@ -11,31 +11,31 @@ pipeline default() {
     "*",
     base + "/*",
     {
-    responses: [
-    {status: 200, body: "{\"object\":\"data_source\",\"id\":\"ds_123\"}", headers: {}},
-    {
-    status: 200,
-    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
-    headers: {},
-  },
-    {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}", headers: {}},
-    {
-    status: 200,
-    body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
-    headers: {},
-  },
-    {
-    status: 200,
-    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
-    headers: {},
-  },
-    {
-    status: 200,
-    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"deleted\":true}",
-    headers: {},
-  },
-  ],
-  },
+      responses: [
+        {status: 200, body: "{\"object\":\"data_source\",\"id\":\"ds_123\"}", headers: {}},
+        {
+          status: 200,
+          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
+          headers: {},
+        },
+        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}", headers: {}},
+        {
+          status: 200,
+          body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"deleted\":true}",
+          headers: {},
+        },
+      ],
+    },
   )
   let data_source = call("data_sources.retrieve", {data_source_id: "ds_123"})
   assert_eq(data_source.object, "data_source", "retrieve data source object")
