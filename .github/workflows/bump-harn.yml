@@ -146,5 +146,9 @@ jobs:
 
           PR_NUMBER="$(gh pr list --repo "${REPO}" --head "${BRANCH}" --base main --json number --jq '.[0].number // ""')"
           if [ -n "${PR_NUMBER}" ]; then
-            gh pr merge "${PR_NUMBER}" --repo "${REPO}" --auto --squash
+            if gh pr merge "${PR_NUMBER}" --repo "${REPO}" --auto --squash; then
+              echo "Enabled auto-merge for #${PR_NUMBER}." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Created or refreshed #${PR_NUMBER}, but auto-merge is not enabled for this repository." >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
