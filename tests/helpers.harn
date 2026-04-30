@@ -39,19 +39,19 @@ pub fn assert_notion_interface() {
   assert(initialized.initialized == true, "init stores state")
   let activated = activate(
     [
-    {
-    id: "notion.webhook",
-    kind: "webhook",
-    path: "/hooks/notion",
-    secrets: {verification_token: "test-secret"},
-  },
-    {
-    id: "notion.poll",
-    kind: "poll",
-    poll: {resource: "data_source", data_source_id: "ds_123", high_water_mark: "last_edited_time"},
-    api_token: "secret_api",
-  },
-  ],
+      {
+        id: "notion.webhook",
+        kind: "webhook",
+        path: "/hooks/notion",
+        secrets: {verification_token: "test-secret"},
+      },
+      {
+        id: "notion.poll",
+        kind: "poll",
+        poll: {resource: "data_source", data_source_id: "ds_123", high_water_mark: "last_edited_time"},
+        api_token: "secret_api",
+      },
+    ],
   )
   assert_eq(activated.bindings, 2, "activate counts bindings")
   assert_eq(activated.webhook_bindings, 1, "activate counts webhook bindings")

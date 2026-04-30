@@ -11,31 +11,31 @@ pipeline default() {
     "*",
     base + "/*",
     {
-    responses: [
-    {status: 200, body: "{\"object\":\"data_source\",\"id\":\"ds_123\"}", headers: {}},
-    {
-    status: 200,
-    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
-    headers: {},
-  },
-    {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}", headers: {}},
-    {
-    status: 200,
-    body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
-    headers: {},
-  },
-    {
-    status: 200,
-    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
-    headers: {},
-  },
-    {
-    status: 200,
-    body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"deleted\":true}",
-    headers: {},
-  },
-  ],
-  },
+      responses: [
+        {status: 200, body: "{\"object\":\"data_source\",\"id\":\"ds_123\"}", headers: {}},
+        {
+          status: 200,
+          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
+          headers: {},
+        },
+        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}", headers: {}},
+        {
+          status: 200,
+          body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"deleted\":true}",
+          headers: {},
+        },
+      ],
+    },
   )
   let data_source = call("data_sources.retrieve", {data_source_id: "ds_123"})
   assert_eq(data_source.object, "data_source", "retrieve data source object")
@@ -53,7 +53,7 @@ pipeline default() {
   assert_eq(deleted.deleted, true, "delete view query")
   let calls = http_mock_calls()
   assert_eq(calls[0].url, base + "/data_sources/ds_123", "retrieve data source URL")
-  assert_eq(calls[0].headers.get("Notion-Version"), "2026-03-11", "latest Notion version header")
+  assert_eq(calls[0].headers.get("notion-version"), "2026-03-11", "latest Notion version header")
   assert_eq(calls[1].url, base + "/views/view_123/queries", "create view query URL")
   assert_eq(json_parse(calls[1].body).page_size, 50, "create view query body")
   assert_eq(calls[2].url, base + "/views/view_123", "retrieve view URL")

@@ -120,34 +120,34 @@ pub fn payload_schema() {
   return {
     harn_schema_name: "NotionEventPayload",
     json_schema: {
-    type: "object",
-    required: ["provider", "event", "event_type", "resource_id", "raw"],
-    additionalProperties: true,
-    properties: {
-    provider: {const: "notion"},
-    event: {type: "string"},
-    event_type: {type: "string"},
-    workspace_id: {type: ["string", "null"]},
-    request_id: {type: ["string", "null"]},
-    subscription_id: {type: ["string", "null"]},
-    integration_id: {type: ["string", "null"]},
-    attempt_number: {type: ["integer", "null"]},
-    entity_id: {type: ["string", "null"]},
-    entity_type: {type: ["string", "null"]},
-    api_version: {type: ["string", "null"]},
-    verification_token: {type: ["string", "null"]},
-    resource_id: {type: "string"},
-    parent_id: {type: ["string", "null"]},
-    actor: {
-    type: "object",
-    required: ["id", "name"],
-    properties: {id: {type: ["string", "null"]}, name: {type: ["string", "null"]}},
-  },
-    occurred_at: {type: ["string", "null"]},
-    polled: {type: ["object", "null"]},
-    raw: {type: "object"},
-  },
-  },
+      type: "object",
+      required: ["provider", "event", "event_type", "resource_id", "raw"],
+      additionalProperties: true,
+      properties: {
+        provider: {const: "notion"},
+        event: {type: "string"},
+        event_type: {type: "string"},
+        workspace_id: {type: ["string", "null"]},
+        request_id: {type: ["string", "null"]},
+        subscription_id: {type: ["string", "null"]},
+        integration_id: {type: ["string", "null"]},
+        attempt_number: {type: ["integer", "null"]},
+        entity_id: {type: ["string", "null"]},
+        entity_type: {type: ["string", "null"]},
+        api_version: {type: ["string", "null"]},
+        verification_token: {type: ["string", "null"]},
+        resource_id: {type: "string"},
+        parent_id: {type: ["string", "null"]},
+        actor: {
+          type: "object",
+          required: ["id", "name"],
+          properties: {id: {type: ["string", "null"]}, name: {type: ["string", "null"]}},
+        },
+        occurred_at: {type: ["string", "null"]},
+        polled: {type: ["object", "null"]},
+        raw: {type: "object"},
+      },
+    },
   }
 }
 
@@ -255,8 +255,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_a_block(__sdk_client(cfg), unwrap(block_id))
-    },
+        retrieve_a_block(__sdk_client(cfg), unwrap(block_id))
+      },
     )
   }
   if method == "blocks.update" {
@@ -266,8 +266,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      update_a_block(__sdk_client(cfg), unwrap(block_id), __call_body(args))
-    },
+        update_a_block(__sdk_client(cfg), unwrap(block_id), __call_body(args))
+      },
     )
   }
   if method == "blocks.delete" {
@@ -277,8 +277,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      delete_a_block(__sdk_client(cfg), unwrap(block_id))
-    },
+        delete_a_block(__sdk_client(cfg), unwrap(block_id))
+      },
     )
   }
   if method == "blocks.children.list" {
@@ -288,8 +288,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      get_block_children(__sdk_client(cfg), unwrap(block_id), args?.start_cursor, args?.page_size)
-    },
+        get_block_children(__sdk_client(cfg), unwrap(block_id), args?.start_cursor, args?.page_size)
+      },
     )
   }
   if method == "pages.retrieve" {
@@ -299,15 +299,15 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_a_page(__sdk_client(cfg), unwrap(page_id), args?.filter_properties)
-    },
+        retrieve_a_page(__sdk_client(cfg), unwrap(page_id), args?.filter_properties)
+      },
     )
   }
   if method == "pages.create" {
     return __sdk_result(
       try {
-      post_page(__sdk_client(cfg), __call_body(args))
-    },
+        post_page(__sdk_client(cfg), __call_body(args))
+      },
     )
   }
   if method == "pages.update" {
@@ -317,8 +317,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      patch_page(__sdk_client(cfg), unwrap(page_id), __call_body(args))
-    },
+        patch_page(__sdk_client(cfg), unwrap(page_id), __call_body(args))
+      },
     )
   }
   if method == "pages.markdown.retrieve" {
@@ -328,8 +328,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_page_markdown(__sdk_client(cfg), unwrap(page_id), args?.include_transcript)
-    },
+        retrieve_page_markdown(__sdk_client(cfg), unwrap(page_id), args?.include_transcript)
+      },
     )
   }
   if method == "pages.markdown.update" {
@@ -339,8 +339,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      update_page_markdown(__sdk_client(cfg), unwrap(page_id), __call_body(args))
-    },
+        update_page_markdown(__sdk_client(cfg), unwrap(page_id), __call_body(args))
+      },
     )
   }
   if method == "pages.move" {
@@ -350,8 +350,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      move_page(__sdk_client(cfg), unwrap(page_id), __call_body(args))
-    },
+        move_page(__sdk_client(cfg), unwrap(page_id), __call_body(args))
+      },
     )
   }
   if method == "pages.properties.retrieve" {
@@ -365,21 +365,21 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_a_page_property(
-      __sdk_client(cfg),
-      unwrap(page_id),
-      unwrap(property_id),
-      args?.start_cursor,
-      args?.page_size,
-    )
-    },
+        retrieve_a_page_property(
+          __sdk_client(cfg),
+          unwrap(page_id),
+          unwrap(property_id),
+          args?.start_cursor,
+          args?.page_size,
+        )
+      },
     )
   }
   if method == "databases.create" {
     return __sdk_result(
       try {
-      create_database(__sdk_client(cfg), __call_body(args))
-    },
+        create_database(__sdk_client(cfg), __call_body(args))
+      },
     )
   }
   if method == "databases.retrieve" {
@@ -389,8 +389,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_database(__sdk_client(cfg), unwrap(database_id))
-    },
+        retrieve_database(__sdk_client(cfg), unwrap(database_id))
+      },
     )
   }
   if method == "databases.update" {
@@ -400,8 +400,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      update_database(__sdk_client(cfg), unwrap(database_id), __call_body(args))
-    },
+        update_database(__sdk_client(cfg), unwrap(database_id), __call_body(args))
+      },
     )
   }
   if method == "databases.query" {
@@ -412,9 +412,9 @@ pub fn call(method, args = {}) {
     return __notion_request(
       "POST",
       __notion_api_url(
-      cfg.api_base_url,
-      "/databases/" + url_encode(to_string(unwrap(database_id))) + "/query",
-    ),
+        cfg.api_base_url,
+        "/databases/" + url_encode(to_string(unwrap(database_id))) + "/query",
+      ),
       __call_body(args),
       cfg,
     )
@@ -422,8 +422,8 @@ pub fn call(method, args = {}) {
   if method == "data_sources.create" {
     return __sdk_result(
       try {
-      create_a_database(__sdk_client(cfg), __call_body(args))
-    },
+        create_a_database(__sdk_client(cfg), __call_body(args))
+      },
     )
   }
   if method == "data_sources.retrieve" {
@@ -433,8 +433,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_a_data_source(__sdk_client(cfg), unwrap(data_source_id))
-    },
+        retrieve_a_data_source(__sdk_client(cfg), unwrap(data_source_id))
+      },
     )
   }
   if method == "data_sources.update" {
@@ -444,8 +444,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      update_a_data_source(__sdk_client(cfg), unwrap(data_source_id), __call_body(args))
-    },
+        update_a_data_source(__sdk_client(cfg), unwrap(data_source_id), __call_body(args))
+      },
     )
   }
   if method == "data_sources.query" {
@@ -455,13 +455,13 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      post_database_query(
-      __sdk_client(cfg),
-      unwrap(data_source_id),
-      __call_body(args),
-      args?.filter_properties,
-    )
-    },
+        post_database_query(
+          __sdk_client(cfg),
+          unwrap(data_source_id),
+          __call_body(args),
+          args?.filter_properties,
+        )
+      },
     )
   }
   if method == "data_sources.templates.list" {
@@ -471,14 +471,14 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      list_data_source_templates(
-      __sdk_client(cfg),
-      unwrap(data_source_id),
-      args?.name,
-      args?.start_cursor,
-      args?.page_size,
-    )
-    },
+        list_data_source_templates(
+          __sdk_client(cfg),
+          unwrap(data_source_id),
+          args?.name,
+          args?.start_cursor,
+          args?.page_size,
+        )
+      },
     )
   }
   if method == "blocks.children.append" {
@@ -492,15 +492,15 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      patch_block_children(__sdk_client(cfg), block_id, body)
-    },
+        patch_block_children(__sdk_client(cfg), block_id, body)
+      },
     )
   }
   if method == "search.query" {
     return __sdk_result(
       try {
-      post_search(__sdk_client(cfg), __call_body(args))
-    },
+        post_search(__sdk_client(cfg), __call_body(args))
+      },
     )
   }
   if method == "comments.create" {
@@ -516,15 +516,15 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      create_a_comment(__sdk_client(cfg), variant)
-    },
+        create_a_comment(__sdk_client(cfg), variant)
+      },
     )
   }
   if method == "comments.list" {
     return __sdk_result(
       try {
-      list_comments(__sdk_client(cfg), args?.block_id, args?.start_cursor, args?.page_size)
-    },
+        list_comments(__sdk_client(cfg), args?.block_id, args?.start_cursor, args?.page_size)
+      },
     )
   }
   if method == "comments.retrieve" {
@@ -534,8 +534,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_comment(__sdk_client(cfg), unwrap(comment_id))
-    },
+        retrieve_comment(__sdk_client(cfg), unwrap(comment_id))
+      },
     )
   }
   if method == "comments.update" {
@@ -545,8 +545,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      update_a_comment(__sdk_client(cfg), unwrap(comment_id), __call_body(args))
-    },
+        update_a_comment(__sdk_client(cfg), unwrap(comment_id), __call_body(args))
+      },
     )
   }
   if method == "comments.delete" {
@@ -556,29 +556,29 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      delete_a_comment(__sdk_client(cfg), unwrap(comment_id))
-    },
+        delete_a_comment(__sdk_client(cfg), unwrap(comment_id))
+      },
     )
   }
   if method == "custom_emojis.list" {
     return __sdk_result(
       try {
-      list_custom_emojis(__sdk_client(cfg), args?.start_cursor, args?.page_size, args?.name)
-    },
+        list_custom_emojis(__sdk_client(cfg), args?.start_cursor, args?.page_size, args?.name)
+      },
     )
   }
   if method == "file_uploads.list" {
     return __sdk_result(
       try {
-      list_file_uploads(__sdk_client(cfg), args?.status, args?.start_cursor, args?.page_size)
-    },
+        list_file_uploads(__sdk_client(cfg), args?.status, args?.start_cursor, args?.page_size)
+      },
     )
   }
   if method == "file_uploads.create" {
     return __sdk_result(
       try {
-      create_file(__sdk_client(cfg), __call_body(args))
-    },
+        create_file(__sdk_client(cfg), __call_body(args))
+      },
     )
   }
   if method == "file_uploads.retrieve" {
@@ -588,8 +588,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_file_upload(__sdk_client(cfg), unwrap(file_upload_id))
-    },
+        retrieve_file_upload(__sdk_client(cfg), unwrap(file_upload_id))
+      },
     )
   }
   if method == "file_uploads.complete" {
@@ -599,8 +599,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      complete_file_upload(__sdk_client(cfg), unwrap(file_upload_id))
-    },
+        complete_file_upload(__sdk_client(cfg), unwrap(file_upload_id))
+      },
     )
   }
   if method == "file_uploads.send" {
@@ -610,22 +610,22 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      upload_file(__sdk_client(cfg), unwrap(file_upload_id), __call_body(args))
-    },
+        upload_file(__sdk_client(cfg), unwrap(file_upload_id), __call_body(args))
+      },
     )
   }
   if method == "users.list" {
     return __sdk_result(
       try {
-      get_users(__sdk_client(cfg), args?.start_cursor, args?.page_size)
-    },
+        get_users(__sdk_client(cfg), args?.start_cursor, args?.page_size)
+      },
     )
   }
   if method == "users.me" {
     return __sdk_result(
       try {
-      get_self(__sdk_client(cfg))
-    },
+        get_self(__sdk_client(cfg))
+      },
     )
   }
   if method == "users.retrieve" {
@@ -635,28 +635,28 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      get_user(__sdk_client(cfg), unwrap(user_id))
-    },
+        get_user(__sdk_client(cfg), unwrap(user_id))
+      },
     )
   }
   if method == "views.list" {
     return __sdk_result(
       try {
-      list_views(
-      __sdk_client(cfg),
-      args?.database_id,
-      args?.data_source_id,
-      args?.start_cursor,
-      args?.page_size,
-    )
-    },
+        list_views(
+          __sdk_client(cfg),
+          args?.database_id,
+          args?.data_source_id,
+          args?.start_cursor,
+          args?.page_size,
+        )
+      },
     )
   }
   if method == "views.create" {
     return __sdk_result(
       try {
-      create_view(__sdk_client(cfg), __call_body(args))
-    },
+        create_view(__sdk_client(cfg), __call_body(args))
+      },
     )
   }
   if method == "views.retrieve" {
@@ -666,8 +666,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      retrieve_a_view(__sdk_client(cfg), unwrap(view_id))
-    },
+        retrieve_a_view(__sdk_client(cfg), unwrap(view_id))
+      },
     )
   }
   if method == "views.update" {
@@ -677,8 +677,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      update_a_view(__sdk_client(cfg), unwrap(view_id), __call_body(args))
-    },
+        update_a_view(__sdk_client(cfg), unwrap(view_id), __call_body(args))
+      },
     )
   }
   if method == "views.delete" {
@@ -688,8 +688,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      delete_view(__sdk_client(cfg), unwrap(view_id))
-    },
+        delete_view(__sdk_client(cfg), unwrap(view_id))
+      },
     )
   }
   if method == "views.queries.create" {
@@ -699,8 +699,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      create_view_query(__sdk_client(cfg), unwrap(view_id), __call_body(args))
-    },
+        create_view_query(__sdk_client(cfg), unwrap(view_id), __call_body(args))
+      },
     )
   }
   if method == "views.queries.results" || method == "views.queries.retrieve" {
@@ -714,14 +714,14 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      get_view_query_results(
-      __sdk_client(cfg),
-      unwrap(view_id),
-      unwrap(query_id),
-      args?.start_cursor,
-      args?.page_size,
-    )
-    },
+        get_view_query_results(
+          __sdk_client(cfg),
+          unwrap(view_id),
+          unwrap(query_id),
+          args?.start_cursor,
+          args?.page_size,
+        )
+      },
     )
   }
   if method == "views.queries.delete" {
@@ -735,8 +735,8 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-      delete_view_query(__sdk_client(cfg), unwrap(view_id), unwrap(query_id))
-    },
+        delete_view_query(__sdk_client(cfg), unwrap(view_id), unwrap(query_id))
+      },
     )
   }
   if method == "api_call" {
@@ -811,10 +811,10 @@ pub fn poll_tick(ctx = nil) {
   return {
     events: emitted,
     cursor: if capped {
-    ctx?.cursor
-  } else {
-    __advance_cursor(ctx?.cursor, poll_binding.high_water_mark, max_seen)
-  },
+      ctx?.cursor
+    } else {
+      __advance_cursor(ctx?.cursor, poll_binding.high_water_mark, max_seen)
+    },
     state: state,
   }
 }
@@ -840,10 +840,10 @@ fn __reject(status, code, message) {
   return {
     type: "reject",
     reject: {
-    status: status,
-    body: json_stringify({error: code, message: message}),
-    content_type: "application/json",
-  },
+      status: status,
+      body: json_stringify({error: code, message: message}),
+      content_type: "application/json",
+    },
   }
 }
 
@@ -965,10 +965,10 @@ fn __normalize_event(event_type, payload, raw) {
     integration_id: payload?.integration_id,
     attempt_number: payload?.attempt_number,
     entity_id: if resource_id == "" {
-    nil
-  } else {
-    resource_id
-  },
+      nil
+    } else {
+      resource_id
+    },
     entity_type: entity_type,
     api_version: payload?.api_version,
     verification_token: payload?.verification_token,
@@ -1037,8 +1037,8 @@ fn __dedupe_key(event_type, resource_id, raw, payload) {
 fn __resource_id(payload) {
   return to_string(
     payload?.entity?.id ?? payload?.page?.id ?? payload?.database?.id ?? payload?.data_source?.id
-    ?? payload?.id
-    ?? "",
+      ?? payload?.id
+      ?? "",
   )
 }
 
@@ -1071,10 +1071,10 @@ fn __outbound_config(args) {
   }
   return Ok(
     {
-    api_base_url: to_string(api_base_url),
-    notion_version: to_string(notion_version),
-    api_token: to_string(api_token),
-  },
+      api_base_url: to_string(api_base_url),
+      notion_version: to_string(notion_version),
+      api_token: to_string(api_token),
+    },
   )
 }
 
@@ -1145,17 +1145,17 @@ fn __notion_headers(cfg) {
 fn __notion_request(method, url, body, cfg) {
   let response = try {
     http_request(
-    method,
-    url,
-    {
-    headers: __notion_headers(cfg),
-    body: if body == nil {
-    nil
-  } else {
-    json_stringify(body)
-  },
-  },
-  )
+      method,
+      url,
+      {
+        headers: __notion_headers(cfg),
+        body: if body == nil {
+          nil
+        } else {
+          json_stringify(body)
+        },
+      },
+    )
   }
   if is_err(response) {
     return __err("transport", to_string(unwrap_err(response)))
@@ -1172,11 +1172,12 @@ fn __notion_request(method, url, body, cfg) {
     let response_headers = http_response?.headers ?? {}
     return Err(
       {
-      status: http_response.status,
-      code: payload?.code ?? "notion_error",
-      message: payload?.message ?? ("Notion API request failed with status " + to_string(http_response.status)),
-      request_id: response_headers.get("x-request-id") ?? response_headers.get("request-id"),
-    },
+        status: http_response.status,
+        code: payload?.code ?? "notion_error",
+        message: payload?.message
+          ?? ("Notion API request failed with status " + to_string(http_response.status)),
+        request_id: response_headers.get("x-request-id") ?? response_headers.get("request-id"),
+      },
     )
   }
   return payload
@@ -1237,11 +1238,11 @@ fn __sdk_error(error) {
     let payload = unwrap(decoded)
     return Err(
       {
-      status: status,
-      code: payload?.code ?? "notion_error",
-      message: payload?.message ?? text,
-      request_id: nil,
-    },
+        status: status,
+        code: payload?.code ?? "notion_error",
+        message: payload?.message ?? text,
+        request_id: nil,
+      },
     )
   }
   return Err({status: status, code: "notion_error", message: text, request_id: nil})
@@ -1302,13 +1303,13 @@ fn __build_poll_event(binding, page, previous_snapshot) {
     occurred_at: last_edited_time,
     raw: page,
     polled: {
-    resource: binding.resource,
-    source_id: binding.resource_id,
-    state_key: binding?.state_key,
-    high_water_mark: binding.high_water_mark,
-    before: previous_snapshot,
-    after: page,
-  },
+      resource: binding.resource,
+      source_id: binding.resource_id,
+      state_key: binding?.state_key,
+      high_water_mark: binding.high_water_mark,
+      before: previous_snapshot,
+      after: page,
+    },
   }
   return {
     kind: event_type,
@@ -1332,7 +1333,7 @@ fn __normalize_poll_binding(binding) {
     return __err(
       "activation",
       "unsupported notion poll resource `" + to_string(resource)
-      + "`; expected data_source or database",
+        + "`; expected data_source or database",
     )
   }
   let resource_id = if resource == "data_source" {
@@ -1346,32 +1347,33 @@ fn __normalize_poll_binding(binding) {
   let page_size = poll?.page_size ?? 100
   return Ok(
     binding
-    + {
-    binding_id: binding_id,
-    resource: resource,
-    resource_id: to_string(resource_id),
-    high_water_mark: poll?.high_water_mark ?? "last_edited_time",
-    page_size: if page_size < 1 {
-    1
-  } else {
-    if page_size > 100 {
-      100
-    } else {
-      page_size
-    }
-  },
-    filter: poll?.filter,
-    sorts: poll?.sorts ?? [],
-    max_batch_size: poll?.max_batch_size ?? binding?.max_batch_size ?? binding?.config?.max_batch_size,
-    state_key: poll?.state_key ?? poll?.cursor_state_key ?? binding?.state_key ?? binding?.config?.state_key,
-    api_base_url: binding?.api_base_url ?? binding?.config?.api_base_url ?? poll?.api_base_url,
-    api_token: binding?.api_token ?? binding?.token ?? binding?.secrets?.api_token ?? binding?.config?.api_token
-    ?? binding?.config?.secrets?.api_token
-    ?? poll?.api_token
-    ?? poll?.token
-    ?? poll?.secrets?.api_token,
-    notion_version: binding?.notion_version ?? binding?.config?.notion_version ?? poll?.notion_version,
-  },
+      + {
+      binding_id: binding_id,
+      resource: resource,
+      resource_id: to_string(resource_id),
+      high_water_mark: poll?.high_water_mark ?? "last_edited_time",
+      page_size: if page_size < 1 {
+        1
+      } else {
+        if page_size > 100 {
+          100
+        } else {
+          page_size
+        }
+      },
+      filter: poll?.filter,
+      sorts: poll?.sorts ?? [],
+      max_batch_size: poll?.max_batch_size ?? binding?.max_batch_size ?? binding?.config?.max_batch_size,
+      state_key: poll?.state_key ?? poll?.cursor_state_key ?? binding?.state_key ?? binding?.config?.state_key,
+      api_base_url: binding?.api_base_url ?? binding?.config?.api_base_url ?? poll?.api_base_url,
+      api_token: binding?.api_token ?? binding?.token ?? binding?.secrets?.api_token
+        ?? binding?.config?.api_token
+        ?? binding?.config?.secrets?.api_token
+        ?? poll?.api_token
+        ?? poll?.token
+        ?? poll?.secrets?.api_token,
+      notion_version: binding?.notion_version ?? binding?.config?.notion_version ?? poll?.notion_version,
+    },
   )
 }
 

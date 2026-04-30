@@ -44,10 +44,10 @@ pipeline default() {
   let event_body = fixture_body("page_content_updated")
   let tampered = normalize_inbound(
     {
-    verification_token: secret,
-    body_text: event_body + " ",
-    headers: notion_headers(secret, event_body),
-  },
+      verification_token: secret,
+      body_text: event_body + " ",
+      headers: notion_headers(secret, event_body),
+    },
   )
   assert_eq(tampered.type, "reject", "tampered body rejects")
   assert_eq(tampered.reject.status, 401, "tampered body status")
@@ -59,10 +59,10 @@ pipeline default() {
   assert_eq(wrong_length.type, "reject", "wrong length signature rejects")
   let wrong_secret = normalize_inbound(
     {
-    verification_token: "wrong-secret",
-    body_text: event_body,
-    headers: notion_headers(secret, event_body),
-  },
+      verification_token: "wrong-secret",
+      body_text: event_body,
+      headers: notion_headers(secret, event_body),
+    },
   )
   assert_eq(wrong_secret.type, "reject", "wrong secret rejects")
   shutdown()
