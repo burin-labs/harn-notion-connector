@@ -51,38 +51,5 @@ jobs:
       - name: Install Harn dependencies
         run: harn install
 
-      - name: Check
-        run: harn check src
-
-      - name: Lint
-        run: harn lint src
-
-      - name: Format
-        run: harn fmt --check src tests
-
-      - name: Run smoke tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          for test in tests/*.harn; do
-            harn run "${test}"
-          done
-
-      - name: Connector contract
-        run: harn connector check .
-
-      - name: Package install smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          smoke_root="$(mktemp -d)"
-          trap 'rm -rf "$smoke_root"' EXIT
-          cat > "$smoke_root/harn.toml" <<'EOF'
-          [package]
-          name = "harn-notion-connector-consumer-smoke"
-          version = "0.0.0"
-          EOF
-          cd "$smoke_root"
-          harn add "$GITHUB_WORKSPACE@HEAD"
-          printf 'import "harn-notion-connector/default"\n' > smoke.harn
-          harn check smoke.harn
+      - name: Connector package gate
+        run: harn connector test "$GITHUB_WORKSPACE" --provider notion --run-poll-tick
