@@ -1,17 +1,11 @@
-import {
-  activate,
-  init,
-  kinds,
-  normalize_inbound,
-  payload_schema,
-  provider_id,
-  shutdown,
-} from "../src/lib"
+import { activate, init, kinds, payload_schema, provider_id, shutdown } from "../src/lib"
 
+/** Build a Notion HMAC signature header for fixture request bodies. */
 pub fn notion_headers(secret, body) {
   return {["x-notion-signature"]: "sha256=" + hmac_sha256(secret, body)}
 }
 
+/** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
 pub fn signed_raw(secret, body, extra = nil) {
   return {
     verification_token: secret,
@@ -22,21 +16,24 @@ pub fn signed_raw(secret, body, extra = nil) {
     + extra ?? {}
 }
 
+/** Read a recorded webhook fixture body by basename. */
 pub fn fixture_body(name) {
   return read_file(source_dir() + "/fixtures/webhooks/" + name + ".json")
 }
 
+/** Build a signed raw inbound webhook envelope from a recorded fixture. */
 pub fn fixture_raw(name, secret, extra = nil) {
   return signed_raw(secret, fixture_body(name), extra)
 }
 
+/** Assert the exported connector lifecycle/interface surface. */
 pub fn assert_notion_interface() {
   shutdown()
-  assert_eq(provider_id(), "notion", "provider id")
-  assert_eq(kinds(), ["webhook", "poll"], "supported kinds")
-  assert_eq(payload_schema().harn_schema_name, "NotionEventPayload", "payload schema name")
+  require provider_id() == "notion", "provider id"
+  require kinds() == ["webhook", "poll"], "supported kinds"
+  require payload_schema().harn_schema_name == "NotionEventPayload", "payload schema name"
   let initialized = init({verification_token: "test-secret", api_token: "secret_api"})
-  assert(initialized.initialized == true, "init stores state")
+  require initialized.initialized, "init stores state"
   let activated = activate(
     [
       {
@@ -53,7 +50,7 @@ pub fn assert_notion_interface() {
       },
     ],
   )
-  assert_eq(activated.bindings, 2, "activate counts bindings")
-  assert_eq(activated.webhook_bindings, 1, "activate counts webhook bindings")
-  assert_eq(activated.poll_bindings, 1, "activate counts poll bindings")
+  require activated.bindings == 2, "activate counts bindings"
+  require activated.webhook_bindings == 1, "activate counts webhook bindings"
+  require activated.poll_bindings == 1, "activate counts poll bindings"
 }

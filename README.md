@@ -5,19 +5,22 @@ webhook signatures, normalizes Notion event payloads to the canonical
 `TriggerEvent` shape, and dispatches outbound API calls via
 [notion-sdk-harn](https://github.com/burin-labs/notion-sdk-harn).
 
-> **Status: pre-alpha** — actively developed in tandem with
-> [burin-labs/harn](https://github.com/burin-labs/harn). See the
-> [Pure-Harn Connectors Pivot epic #350](https://github.com/burin-labs/harn/issues/350).
+> **Status: pre-alpha** — requires the pinned Harn CLI version in
+> [`.harn-version`](./.harn-version) or newer compatible Harn 0.7.x runtime.
 
 This is an **inbound + outbound** connector implementing the Harn Connector
-interface defined in
-[harn#346](https://github.com/burin-labs/harn/issues/346). It complements
-the typed SDK at `notion-sdk-harn`, which it imports for its outbound API
-surface.
+Contract v1. Its `payload_schema()` export returns the canonical
+`{ harn_schema_name, json_schema }` shape, `normalize_inbound(...)` returns
+`NormalizeResult` v1 variants, and `poll_tick(...)` returns Harn-managed
+cursor/state updates. It complements the typed SDK at `notion-sdk-harn`, which
+it imports for its outbound API surface. See the canonical
+[Harn connector authoring docs](https://docs.harnlang.com/connectors/authoring.html)
+for the contract and package gate.
 
 ## Install
 
-With Harn 0.7.39 or newer:
+With the pinned Harn CLI version from `.harn-version` or a newer compatible
+Harn 0.7.x runtime:
 
 ```sh
 harn add github.com/burin-labs/harn-notion-connector@main
@@ -55,6 +58,51 @@ The connector exports the standard Harn Connector interface:
 `provider_id()`, `kinds()`, `payload_schema()`, `init(ctx)`,
 `activate(bindings)`, `shutdown()`, `normalize_inbound(raw)`,
 `call(method, args)`, and `poll_tick(ctx)`.
+
+## Supported Surface
+
+Inbound webhooks:
+
+- `subscription.verification` returns a normalized verification event without
+  requiring a signature.
+- Signed Notion webhook payloads are verified with `x-notion-signature` and
+  normalized using the Notion `type` field as the event kind. The fixture suite
+  covers `page.content_updated`, `database.created`, and `comment.created`.
+
+Polling:
+
+- `poll_tick(ctx)` supports `resource = "data_source"` and
+  `resource = "database"` bindings. It emits normalized `page.content_updated`
+  events for changed query results.
+
+Outbound calls:
+
+- Blocks: `blocks.retrieve`, `blocks.update`, `blocks.delete`,
+  `blocks.children.list`, `blocks.children.append`.
+- Pages: `pages.retrieve`, `pages.create`, `pages.update`,
+  `pages.markdown.retrieve`, `pages.markdown.update`, `pages.move`,
+  `pages.properties.retrieve`.
+- Databases and data sources: `databases.create`, `databases.retrieve`,
+  `databases.update`, `databases.query`, `data_sources.create`,
+  `data_sources.retrieve`, `data_sources.update`, `data_sources.query`,
+  `data_sources.templates.list`.
+- Comments, users, files, custom emojis, search, and views:
+  `comments.*`, `users.*`, `file_uploads.*`, `custom_emojis.list`,
+  `search.query`, `views.*`, `views.queries.*`.
+- `api_call` is an escape hatch for Notion endpoints not yet wrapped by
+  `notion-sdk-harn`.
+
+Operational limits:
+
+- Signed webhook normalization requires exact `raw.body_text`; parsed JSON alone
+  is rejected because HMAC verification must use the original request body.
+- `normalize_inbound(raw)` is deterministic and does not perform network I/O.
+- Harn owns webhook routing, poll schedules, leases, retry policy, durable
+  cursor/state, and secret resolution. This connector only validates and
+  normalizes inbound payloads, dispatches SDK calls, and returns poll results.
+- Polling fetches one Notion query page per tick and respects
+  `max_batch_size`; capped ticks leave the cursor unchanged for retry-safe
+  draining.
 
 ## Polling Fallback
 
@@ -166,13 +214,7 @@ Run the local CI equivalent from this repo:
 
 ```sh
 harn install
-harn check src/lib.harn
-harn lint src/lib.harn
-harn fmt --check src/lib.harn tests/*.harn
-harn connector check . --provider notion --run-poll-tick
-for test in tests/*.harn; do
-  harn run "$test" || exit 1
-done
+harn connector test "$PWD" --provider notion --run-poll-tick
 ```
 
 ## License
