@@ -53,3 +53,17 @@ jobs:
 
       - name: Connector package gate
         run: harn connector test "$GITHUB_WORKSPACE" --provider notion --run-poll-tick
+
+  ci-status:
+    name: CI status
+    if: always()
+    needs: [harn]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for failures
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI jobs passed or were skipped"
