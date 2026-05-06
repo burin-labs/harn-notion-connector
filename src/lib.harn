@@ -1137,8 +1137,8 @@ fn __notion_api_url(api_base_url, path) {
 fn __notion_headers(cfg) {
   return {
     Authorization: "Bearer " + cfg.api_token,
-    ["Content-Type"]: "application/json",
-    ["Notion-Version"]: cfg.notion_version,
+    "Content-Type": "application/json",
+    "Notion-Version": cfg.notion_version,
   }
 }
 
@@ -1185,7 +1185,7 @@ fn __notion_request(method, url, body, cfg) {
 
 fn __sdk_client(cfg) {
   var client = new_client(__sdk_base_url(cfg.api_base_url), cfg.api_token)
-  client.extra_headers = {["Notion-Version"]: cfg.notion_version}
+  client.extra_headers = {"Notion-Version": cfg.notion_version}
   return client
 }
 

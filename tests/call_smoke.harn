@@ -16,7 +16,7 @@ pipeline default() {
         {
           status: 200,
           body: "{\"object\":\"page\",\"id\":\"page_123\"}",
-          headers: {["x-request-id"]: "req_page"},
+          headers: {"x-request-id": "req_page"},
         },
         {
           status: 200,
@@ -56,7 +56,7 @@ pipeline default() {
     {
       status: 404,
       body: "{\"object\":\"error\",\"code\":\"object_not_found\",\"message\":\"missing page\"}",
-      headers: {["x-request-id"]: "req_404"},
+      headers: {"x-request-id": "req_404"},
     },
   )
   let missing = call("pages.retrieve", {page_id: "missing"})
