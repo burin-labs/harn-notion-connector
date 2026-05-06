@@ -49,7 +49,7 @@ pipeline default() {
   let missing_signature = normalize_inbound({verification_token: secret, body_text: event_body, headers: {}})
   expect_eq(missing_signature.type, "reject", "missing signature rejects")
   let wrong_length = normalize_inbound(
-    {verification_token: secret, body_text: event_body, headers: {["x-notion-signature"]: "sha256=abc"}},
+    {verification_token: secret, body_text: event_body, headers: {"x-notion-signature": "sha256=abc"}},
   )
   expect_eq(wrong_length.type, "reject", "wrong length signature rejects")
   let wrong_secret = normalize_inbound(

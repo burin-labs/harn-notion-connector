@@ -2,7 +2,7 @@ import { activate, init, kinds, payload_schema, provider_id, shutdown } from "..
 
 /** Build a Notion HMAC signature header for fixture request bodies. */
 pub fn notion_headers(secret, body) {
-  return {["x-notion-signature"]: "sha256=" + hmac_sha256(secret, body)}
+  return {"x-notion-signature": "sha256=" + hmac_sha256(secret, body)}
 }
 
 /** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
