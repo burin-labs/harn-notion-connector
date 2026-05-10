@@ -12,6 +12,31 @@ default = "src/lib.harn"
 id = "notion"
 connector = { harn = "src/lib.harn" }
 
+[providers.setup]
+auth_type = "oauth2"
+flow = "oauth2"
+required_secrets = ["notion/api-token", "notion/verification-token"]
+setup_command = ["harn", "connect", "notion"]
+validation_command = ["harn", "connect", "status", "--connector", "notion", "--json"]
+
+[[providers.setup.health_checks]]
+id = "api-token"
+kind = "secret"
+secret = "notion/api-token"
+
+[[providers.setup.health_checks]]
+id = "verification-token"
+kind = "secret"
+secret = "notion/verification-token"
+
+[providers.setup.recovery]
+missing_auth = "Store notion/api-token and notion/verification-token before enabling Notion bindings."
+expired_credentials = "Refresh the OAuth token or rotate the internal integration token, then rerun validation."
+revoked_credentials = "Replace notion/api-token with an active Notion OAuth or internal integration token."
+missing_scopes = "Grant page, database, block, comment, or user capabilities required by the configured workflows."
+inaccessible_resource = "Share the target Notion pages or databases with the integration."
+transient_provider_outage = "Retry after Notion API and webhook delivery endpoints are healthy."
+
 # Publishable dependencies must be git-backed so this package resolves from a
 # clean consumer project without a sibling checkout.
 [dependencies]
