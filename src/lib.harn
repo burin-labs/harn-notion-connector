@@ -105,6 +105,34 @@ let NOTION_OUTBOUND_METHODS = [
   "api_call",
 ]
 
+let NOTION_WRITE_METHODS = [
+  "blocks.update",
+  "blocks.delete",
+  "blocks.children.append",
+  "pages.create",
+  "pages.update",
+  "pages.markdown.update",
+  "pages.move",
+  "databases.create",
+  "databases.update",
+  "data_sources.create",
+  "data_sources.update",
+  "comments.create",
+  "comments.update",
+  "comments.delete",
+  "file_uploads.create",
+  "file_uploads.complete",
+  "file_uploads.send",
+  "views.create",
+  "views.update",
+  "views.delete",
+  "views.queries.create",
+  "views.queries.delete",
+  "api_call",
+]
+
+let NOTION_TRIAGE_SCHEMA = "harn.triage_event.v1"
+
 /** Return this connector's Harn provider id. */
 pub fn provider_id() {
   return NOTION_PROVIDER_ID
@@ -145,10 +173,62 @@ pub fn payload_schema() {
         },
         occurred_at: {type: ["string", "null"]},
         polled: {type: ["object", "null"]},
+        triage: {
+          type: "object",
+          required: [
+            "schema",
+            "provider",
+            "source",
+            "source_timestamp",
+            "summary",
+            "dedupe_key",
+            "action_intents",
+            "raw_ref",
+          ],
+          additionalProperties: true,
+          properties: {
+            schema: {const: "harn.triage_event.v1"},
+            provider: {const: "notion"},
+            source: {type: "object"},
+            source_timestamp: {type: ["string", "null"]},
+            actors: {type: "array"},
+            summary: {type: "string"},
+            why_it_matters: {type: "string"},
+            proposed_action: {type: "string"},
+            urgency: {type: "string"},
+            priority: {type: "integer"},
+            confidence: {type: "number"},
+            related_refs: {type: "array"},
+            dedupe_key: {type: "string"},
+            privacy: {type: "object"},
+            action_intents: {type: "array"},
+            task: {type: "object"},
+            provenance: {type: "object"},
+            raw_ref: {type: "object"},
+          },
+        },
         raw: {type: "object"},
       },
     },
   }
+}
+
+/** Return side-effect metadata for outbound methods so hosts can gate writes. */
+pub fn method_capabilities() {
+  var methods = {}
+  for method in NOTION_OUTBOUND_METHODS {
+    let writes = contains(NOTION_WRITE_METHODS, method)
+    methods[method] = {
+      method: method,
+      side_effect: if writes {
+        "write"
+      } else {
+        "read"
+      },
+      requires_approval: writes,
+    }
+  }
+  return methods
 }
 
 /** Initialize connector state with orchestrator context. */
@@ -836,6 +916,26 @@ fn __err(code, message) {
   return Err({code: code, message: message})
 }
 
+fn __auth_scope_failure(status, code) {
+  let normalized_code = to_string(code ?? "")
+  if normalized_code == "missing_api_token" {
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "missing_auth",
+      recovery: "Provide a Notion api_token or configure the notion/api-token secret.",
+    }
+  }
+  let scope_codes = ["unauthorized", "restricted_resource", "insufficient_permissions", "missing_scopes"]
+  if status == 401 || status == 403 || contains(scope_codes, normalized_code) {
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "missing_scopes_or_resource_access",
+      recovery: "Grant the integration the required Notion capabilities and share the target page, database, or data source with it.",
+    }
+  }
+  return nil
+}
+
 fn __reject(status, code, message) {
   return {
     type: "reject",
@@ -982,14 +1082,16 @@ fn __normalize_event(event_type, payload, raw) {
 }
 
 fn __build_event(event_type, payload, raw, signature_status) {
-  let normalized_payload = __normalize_event(event_type, payload, raw)
+  var normalized_payload = __normalize_event(event_type, payload, raw)
   let occurred_at = normalized_payload.occurred_at
   let resource_id = normalized_payload.resource_id
   let headers = __event_headers(raw?.headers ?? {})
+  let dedupe_key = __dedupe_key(event_type, resource_id, raw, payload)
+  normalized_payload.triage = __triage_event(event_type, normalized_payload, payload, dedupe_key)
   return {
     kind: to_string(event_type),
     occurred_at: occurred_at,
-    dedupe_key: __dedupe_key(event_type, resource_id, raw, payload),
+    dedupe_key: dedupe_key,
     signature_status: {state: signature_status},
     payload: normalized_payload,
     headers: headers,
@@ -1058,6 +1160,507 @@ fn __actor(payload) {
   return {id: actor?.id, name: actor?.name ?? actor?.person?.email ?? actor?.bot?.owner?.user?.name}
 }
 
+@complexity(allow)
+fn __triage_event(event_type, normalized_payload, raw_payload, dedupe_key) {
+  let task = __triage_task_metadata(raw_payload)
+  let source_kind = __triage_source_kind(event_type, normalized_payload, raw_payload, task)
+  let physical_kind = __triage_physical_kind(source_kind, normalized_payload, raw_payload)
+  let source_id = normalized_payload?.resource_id
+  let source_title = __triage_title(raw_payload, normalized_payload)
+  let source_ref = __notion_ref(physical_kind, source_id)
+  let source_url = __notion_source_url(physical_kind, source_id, raw_payload)
+  let provenance = __triage_provenance(raw_payload, normalized_payload, source_ref)
+  return {
+    schema: NOTION_TRIAGE_SCHEMA,
+    provider: NOTION_PROVIDER_ID,
+    source_kind: source_kind,
+    source: {
+      provider: NOTION_PROVIDER_ID,
+      kind: source_kind,
+      object_kind: physical_kind,
+      id: source_id,
+      ref: source_ref,
+      url: source_url,
+      deep_link: source_url ?? source_ref,
+      title: source_title,
+      workspace_id: normalized_payload?.workspace_id,
+      parent_id: normalized_payload?.parent_id,
+      change_kind: __triage_change_kind(event_type),
+    },
+    source_timestamp: normalized_payload?.occurred_at,
+    actors: __triage_actors(normalized_payload?.actor),
+    summary: __triage_summary(source_kind, event_type, source_title, source_id),
+    why_it_matters: __triage_why(source_kind, task, provenance),
+    proposed_action: __triage_proposed_action(source_kind, task),
+    urgency: __triage_urgency(task),
+    priority: __triage_priority(task),
+    confidence: __triage_confidence(source_title, source_url, task),
+    related_refs: __triage_related_refs(source_ref, provenance),
+    dedupe_key: dedupe_key,
+    privacy: {classification: "internal", redacted: false, flags: ["provider_raw_payload_separate"]},
+    action_intents: __triage_action_intents(source_kind, source_id),
+    task: task,
+    provenance: provenance,
+    raw_ref: {provider: NOTION_PROVIDER_ID, field: "payload.raw"},
+  }
+}
+
+fn __triage_source_kind(event_type, normalized_payload, raw_payload, task) {
+  let lowered_event = lowercase(to_string(event_type))
+  if lowered_event.contains("comment") {
+    return "comment"
+  }
+  if lowered_event.contains("mention") {
+    return "mention"
+  }
+  let entity_type = normalized_payload?.entity_type ?? raw_payload?.object ?? raw_payload?.entity?.type
+  if entity_type == "page" && task.has_task_metadata {
+    return "task"
+  }
+  if entity_type != nil && trim(to_string(entity_type)) != "" {
+    return to_string(entity_type)
+  }
+  if lowered_event.contains("database") {
+    return "database"
+  }
+  return "page"
+}
+
+fn __triage_physical_kind(source_kind, normalized_payload, raw_payload) {
+  if source_kind == "task" || source_kind == "mention" {
+    return "page"
+  }
+  return normalized_payload?.entity_type ?? raw_payload?.object ?? source_kind
+}
+
+fn __triage_change_kind(event_type) {
+  let lowered = lowercase(to_string(event_type))
+  if lowered.contains("created") {
+    return "created"
+  }
+  if lowered.contains("deleted") {
+    return "deleted"
+  }
+  if lowered.contains("updated") || lowered.contains("edited") {
+    return "updated"
+  }
+  if lowered.contains("locked") {
+    return "locked"
+  }
+  return "event"
+}
+
+fn __triage_actors(actor) {
+  if actor == nil || (actor?.id == nil && actor?.name == nil) {
+    return []
+  }
+  return [{id: actor?.id, name: actor?.name}]
+}
+
+fn __triage_title(raw_payload, normalized_payload) {
+  let page = __page_payload(raw_payload)
+  let page_title = __notion_object_title(page)
+  if page_title != nil && page_title != "" {
+    return page_title
+  }
+  let database = __database_payload(raw_payload)
+  let database_title = __notion_object_title(database)
+  if database_title != nil && database_title != "" {
+    return database_title
+  }
+  let comment = __comment_payload(raw_payload)
+  let comment_text = __rich_text_plain(comment?.rich_text ?? comment?.text)
+  if comment_text != nil && comment_text != "" {
+    return comment_text
+  }
+  let entity_title = raw_payload?.entity?.title ?? raw_payload?.title ?? raw_payload?.name
+  if entity_title != nil && trim(to_string(entity_title)) != "" && type_of(entity_title) == "string" {
+    return to_string(entity_title)
+  }
+  return normalized_payload?.resource_id
+}
+
+fn __page_payload(raw_payload) {
+  if raw_payload?.page != nil {
+    return raw_payload.page
+  }
+  if raw_payload?.object == "page" {
+    return raw_payload
+  }
+  return nil
+}
+
+fn __database_payload(raw_payload) {
+  if raw_payload?.database != nil {
+    return raw_payload.database
+  }
+  if raw_payload?.data_source != nil {
+    return raw_payload.data_source
+  }
+  if raw_payload?.object == "database" || raw_payload?.object == "data_source" {
+    return raw_payload
+  }
+  return nil
+}
+
+fn __comment_payload(raw_payload) {
+  if raw_payload?.comment != nil {
+    return raw_payload.comment
+  }
+  if raw_payload?.object == "comment" {
+    return raw_payload
+  }
+  return nil
+}
+
+fn __notion_object_title(object) {
+  let from_properties = __title_from_properties(object?.properties ?? {})
+  if from_properties != nil && from_properties != "" {
+    return from_properties
+  }
+  if object?.title != nil && type_of(object.title) == "string" {
+    return object.title
+  }
+  let rich_title = __rich_text_plain(object?.title)
+  if rich_title != nil && rich_title != "" {
+    return rich_title
+  }
+  if object?.name != nil && trim(to_string(object.name)) != "" {
+    return to_string(object.name)
+  }
+  return nil
+}
+
+fn __title_from_properties(properties) {
+  for entry in (properties ?? {}).entries() {
+    let property = entry.value
+    if property?.type == "title" || property?.title != nil {
+      let title = __rich_text_plain(property?.title)
+      if title != nil && title != "" {
+        return title
+      }
+    }
+  }
+  return nil
+}
+
+fn __rich_text_plain(value) {
+  if value == nil {
+    return nil
+  }
+  if type_of(value) == "string" {
+    return value
+  }
+  var text = ""
+  for part in value ?? [] {
+    text = text + to_string(part?.plain_text ?? part?.text?.content ?? part?.mention?.plain_text ?? "")
+  }
+  let trimmed = trim(text)
+  if trimmed == "" {
+    return nil
+  }
+  return trimmed
+}
+
+@complexity(allow)
+fn __triage_task_metadata(raw_payload) {
+  let page = __page_payload(raw_payload) ?? raw_payload
+  let properties = page?.properties ?? {}
+  var status = nil
+  var assignees = []
+  var due = nil
+  var dates = []
+  var fields = []
+  for entry in properties.entries() {
+    let name = to_string(entry.key)
+    let property = entry.value
+    let property_type = property?.type
+    fields = fields + [{name: name, id: property?.id, type: property_type}]
+    if status == nil && (property_type == "status" || property?.status != nil) {
+      status = property?.status?.name ?? property?.status
+    }
+    if status == nil && (property_type == "select" || property?.select != nil) {
+      status = property?.select?.name ?? property?.select
+    }
+    if property_type == "people" || property?.people != nil {
+      assignees = assignees + __people(property?.people ?? [])
+    }
+    if property_type == "person" || property?.person != nil {
+      assignees = assignees + __people([property?.person])
+    }
+    if property_type == "date" || property?.date != nil {
+      let date_value = property?.date
+      if date_value != nil {
+        let normalized_date = {name: name, start: date_value?.start, end: date_value?.end}
+        dates = dates + [normalized_date]
+        if due == nil || lowercase(name).contains("due") {
+          due = normalized_date
+        }
+      }
+    }
+    if status == nil && (property_type == "checkbox" || property?.checkbox != nil) {
+      status = if property?.checkbox ?? false {
+        "Done"
+      } else {
+        "Not done"
+      }
+    }
+  }
+  return {
+    status: status,
+    assignees: assignees,
+    due: due,
+    dates: dates,
+    properties: fields,
+    has_task_metadata: status != nil || len(assignees) > 0 || due != nil,
+  }
+}
+
+fn __people(values) {
+  var people = []
+  for person in values ?? [] {
+    if person == nil {
+      continue
+    }
+    people = people
+      + [{id: person?.id, name: person?.name, ref: __notion_ref("user", person?.id)}]
+  }
+  return people
+}
+
+fn __notion_ref(kind, id) {
+  if id == nil || trim(to_string(id)) == "" {
+    return nil
+  }
+  return "notion://" + to_string(kind) + "/" + to_string(id)
+}
+
+fn __notion_source_url(kind, id, raw_payload) {
+  let object = if kind == "page" {
+    __page_payload(raw_payload)
+  } else {
+    if kind == "database" || kind == "data_source" {
+      __database_payload(raw_payload)
+    } else {
+      __comment_payload(raw_payload)
+    }
+  }
+  let direct = object?.url ?? raw_payload?.url
+  if direct != nil && trim(to_string(direct)) != "" {
+    return to_string(direct)
+  }
+  let fallback_id = if kind == "comment" {
+    raw_payload?.parent?.page_id ?? raw_payload?.comment?.parent?.page_id
+      ?? raw_payload?.entity?.parent?.id
+  } else {
+    id
+  }
+  if fallback_id == nil || trim(to_string(fallback_id)) == "" {
+    return nil
+  }
+  return "https://www.notion.so/" + to_string(fallback_id).replace("-", "")
+}
+
+fn __triage_provenance(raw_payload, normalized_payload, source_ref) {
+  let page = __page_payload(raw_payload)
+  let database = __database_payload(raw_payload)
+  let comment = __comment_payload(raw_payload)
+  let page_id = page?.id
+    ?? if normalized_payload?.entity_type == "page" {
+    normalized_payload?.resource_id
+  } else {
+    if raw_payload?.entity?.parent?.type == "page" {
+      raw_payload?.entity?.parent?.id
+    } else {
+      nil
+    }
+  }
+  let database_id = database?.id
+    ?? if normalized_payload?.entity_type == "database" || normalized_payload?.entity_type == "data_source" {
+    normalized_payload?.resource_id
+  } else {
+    nil
+  }
+    ?? page?.parent?.database_id
+    ?? page?.parent?.data_source_id
+    ?? if raw_payload?.entity?.parent?.type == "database"
+    || raw_payload?.entity?.parent?.type == "data_source" {
+    raw_payload?.entity?.parent?.id
+  } else {
+    nil
+  }
+  return {
+    source_ref: source_ref,
+    workspace_id: normalized_payload?.workspace_id,
+    page: if page_id == nil {
+      nil
+    } else {
+      {
+        id: page_id,
+        ref: __notion_ref("page", page_id),
+        url: __notion_source_url("page", page_id, page ?? raw_payload),
+        title: __notion_object_title(page),
+      }
+    },
+    database: if database_id == nil {
+      nil
+    } else {
+      {
+        id: database_id,
+        ref: __notion_ref("database", database_id),
+        url: __notion_source_url("database", database_id, database ?? raw_payload),
+        title: __notion_object_title(database) ?? raw_payload?.entity?.parent?.title,
+        schema: __database_schema(database),
+      }
+    },
+    comment: if comment?.id == nil && normalized_payload?.entity_type != "comment" {
+      nil
+    } else {
+      {
+        id: comment?.id ?? normalized_payload?.resource_id,
+        ref: __notion_ref("comment", comment?.id ?? normalized_payload?.resource_id),
+      }
+    },
+  }
+}
+
+fn __database_schema(database) {
+  if database?.properties == nil {
+    return nil
+  }
+  var fields = []
+  for entry in database.properties.entries() {
+    fields = fields + [{name: to_string(entry.key), id: entry.value?.id, type: entry.value?.type}]
+  }
+  return {properties: fields}
+}
+
+fn __triage_related_refs(source_ref, provenance) {
+  var refs = []
+  refs = __append_ref(refs, source_ref)
+  refs = __append_ref(refs, provenance?.page?.ref)
+  refs = __append_ref(refs, provenance?.database?.ref)
+  refs = __append_ref(refs, provenance?.comment?.ref)
+  return refs
+}
+
+fn __append_ref(refs, ref) {
+  if ref == nil || ref == "" || contains(refs, ref) {
+    return refs
+  }
+  return refs + [ref]
+}
+
+fn __triage_summary(source_kind, event_type, title, source_id) {
+  let label = title ?? source_id ?? "untitled"
+  if source_kind == "task" {
+    return "Notion task updated: " + to_string(label)
+  }
+  if source_kind == "comment" {
+    return "Notion comment event: " + to_string(label)
+  }
+  if source_kind == "database" || source_kind == "data_source" {
+    return "Notion database event: " + to_string(label)
+  }
+  return "Notion " + to_string(event_type) + ": " + to_string(label)
+}
+
+fn __triage_why(source_kind, task, provenance) {
+  if source_kind == "task" {
+    let status = if task?.status == nil {
+      ""
+    } else {
+      " Status: " + to_string(task.status) + "."
+    }
+    let due = if task?.due?.start == nil {
+      ""
+    } else {
+      " Due: " + to_string(task.due.start) + "."
+    }
+    return "This Notion task has assignment, status, or date metadata for follow-up." + status + due
+  }
+  if source_kind == "comment" {
+    return "A Notion comment may require a reply or conversion into tracked work."
+  }
+  if provenance?.database?.id != nil {
+    return "The event is tied to a Notion database, preserving schema and page provenance for triage."
+  }
+  return "The event has a stable Notion source reference that can be rendered in an inbox."
+}
+
+fn __triage_proposed_action(source_kind, task) {
+  if source_kind == "task" {
+    if task?.due?.start != nil {
+      return "Review the task, confirm owner and status, then follow up before "
+        + to_string(task.due.start)
+        + "."
+    }
+    return "Review the task, confirm owner and status, then decide whether to follow up or dismiss."
+  }
+  if source_kind == "comment" {
+    return "Open the Notion source, decide whether to reply, and convert to a task only with approval."
+  }
+  return "Open the Notion source, review the change, then dismiss or snooze the inbox item."
+}
+
+fn __triage_urgency(task) {
+  let status = lowercase(to_string(task?.status ?? ""))
+  if status.contains("blocked") || status.contains("urgent") {
+    return "high"
+  }
+  if task?.due?.start != nil {
+    return "normal"
+  }
+  return "low"
+}
+
+fn __triage_priority(task) {
+  let urgency = __triage_urgency(task)
+  if urgency == "high" {
+    return 80
+  }
+  if urgency == "normal" {
+    return 60
+  }
+  return 40
+}
+
+fn __triage_confidence(title, source_url, task) {
+  if title != nil && source_url != nil && task?.has_task_metadata {
+    return 0.95
+  }
+  if title != nil && source_url != nil {
+    return 0.9
+  }
+  if title != nil {
+    return 0.8
+  }
+  return 0.7
+}
+
+fn __triage_action_intents(source_kind, source_id) {
+  return [
+    {kind: "dismiss", label: "Dismiss", side_effect: "local", requires_approval: false},
+    {kind: "snooze", label: "Snooze", side_effect: "local", requires_approval: false},
+    {
+      kind: "convert_to_task",
+      label: "Convert to task",
+      side_effect: "notion_write",
+      method: "pages.create",
+      source_id: source_id,
+      requires_approval: true,
+    },
+    {
+      kind: "follow_up",
+      label: "Follow up",
+      side_effect: "notion_write",
+      method: "comments.create",
+      source_id: source_id,
+      requires_approval: true,
+    },
+  ]
+}
+
 fn __outbound_config(args) {
   let api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
     ?? env_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
@@ -1067,7 +1670,13 @@ fn __outbound_config(args) {
     ?? __state()?.ctx?.secrets?.api_token
     ?? env("NOTION_TOKEN")
   if api_token == nil || trim(to_string(api_token)) == "" {
-    return __err("missing_api_token", "notion connector requires api_token")
+    return Err(
+      {
+        code: "missing_api_token",
+        message: "notion connector requires api_token",
+        auth_scope_failure: __auth_scope_failure(nil, "missing_api_token"),
+      },
+    )
   }
   return Ok(
     {
@@ -1170,15 +1779,18 @@ fn __notion_request(method, url, body, cfg) {
   let payload = unwrap(decoded)
   if http_response.status < 200 || http_response.status >= 300 {
     let response_headers = http_response?.headers ?? {}
-    return Err(
-      {
-        status: http_response.status,
-        code: payload?.code ?? "notion_error",
-        message: payload?.message
-          ?? ("Notion API request failed with status " + to_string(http_response.status)),
-        request_id: response_headers.get("x-request-id") ?? response_headers.get("request-id"),
-      },
-    )
+    var err = {
+      status: http_response.status,
+      code: payload?.code ?? "notion_error",
+      message: payload?.message
+        ?? ("Notion API request failed with status " + to_string(http_response.status)),
+      request_id: response_headers.get("x-request-id") ?? response_headers.get("request-id"),
+    }
+    let auth_scope_failure = __auth_scope_failure(http_response.status, err.code)
+    if auth_scope_failure != nil {
+      err.auth_scope_failure = auth_scope_failure
+    }
+    return Err(err)
   }
   return payload
 }
@@ -1207,7 +1819,19 @@ fn __sdk_result(result) {
   if is_ok(result) {
     return unwrap(result)
   }
-  return __sdk_error(unwrap_err(result))
+  return __with_auth_scope_failure(__sdk_error(unwrap_err(result)))
+}
+
+fn __with_auth_scope_failure(result) {
+  if !is_err(result) {
+    return result
+  }
+  var err = unwrap_err(result)
+  let auth_scope_failure = err?.auth_scope_failure ?? __auth_scope_failure(err?.status, err?.code)
+  if auth_scope_failure != nil {
+    err.auth_scope_failure = auth_scope_failure
+  }
+  return Err(err)
 }
 
 fn __sdk_error(error) {
@@ -1236,16 +1860,24 @@ fn __sdk_error(error) {
   }
   if is_ok(decoded) {
     let payload = unwrap(decoded)
-    return Err(
-      {
-        status: status,
-        code: payload?.code ?? "notion_error",
-        message: payload?.message ?? text,
-        request_id: nil,
-      },
-    )
+    var err = {
+      status: status,
+      code: payload?.code ?? "notion_error",
+      message: payload?.message ?? text,
+      request_id: nil,
+    }
+    let auth_scope_failure = __auth_scope_failure(status, err.code)
+    if auth_scope_failure != nil {
+      err.auth_scope_failure = auth_scope_failure
+    }
+    return Err(err)
   }
-  return Err({status: status, code: "notion_error", message: text, request_id: nil})
+  var err = {status: status, code: "notion_error", message: text, request_id: nil}
+  let auth_scope_failure = __auth_scope_failure(status, err.code)
+  if auth_scope_failure != nil {
+    err.auth_scope_failure = auth_scope_failure
+  }
+  return Err(err)
 }
 
 fn __poll_state(state) {
@@ -1295,8 +1927,19 @@ fn __poll_max_batch_size(ctx, binding) {
 fn __build_poll_event(binding, page, previous_snapshot) {
   let event_type = "page.content_updated"
   let last_edited_time = to_string(page.last_edited_time)
-  let payload = {
+  var payload = {
+    provider: NOTION_PROVIDER_ID,
+    event: event_type,
     event_type: event_type,
+    workspace_id: binding?.workspace_id,
+    request_id: nil,
+    subscription_id: nil,
+    integration_id: nil,
+    attempt_number: nil,
+    entity_id: to_string(page.id),
+    entity_type: page?.object ?? "page",
+    api_version: binding?.notion_version,
+    verification_token: nil,
     resource_id: to_string(page.id),
     parent_id: __parent_id(page),
     actor: __actor(page),
@@ -1311,10 +1954,12 @@ fn __build_poll_event(binding, page, previous_snapshot) {
       after: page,
     },
   }
+  let dedupe_key = __dedupe_key(event_type, payload.resource_id, {}, payload)
+  payload.triage = __triage_event(event_type, payload, page, dedupe_key)
   return {
     kind: event_type,
     occurred_at: last_edited_time,
-    dedupe_key: __dedupe_key(event_type, payload.resource_id, {}, payload),
+    dedupe_key: dedupe_key,
     signature_status: {state: "unsigned"},
     payload: payload,
     headers: {},
