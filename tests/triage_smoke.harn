@@ -1,0 +1,168 @@
+import { call, init, method_capabilities, normalize_inbound, poll_tick, shutdown } from "../src/lib"
+import { expect, expect_eq } from "./assertions"
+import { fixture_raw } from "./helpers"
+
+fn poll_ctx() {
+  return {
+    provider_id: "notion",
+    binding_id: "notion.poll",
+    tick_at: "2026-04-19T13:00:00Z",
+    cursor: nil,
+    state: nil,
+    state_key: "notion:database_tasks",
+    max_batch_size: 10,
+    binding: {
+      id: "notion.poll",
+      kind: "poll",
+      config: {
+        poll: {
+          resource: "data_source",
+          data_source_id: "database_tasks",
+          page_size: 2,
+          high_water_mark: "last_edited_time",
+          state_key: "notion:database_tasks",
+        },
+        api_token: "secret_api",
+      },
+    },
+  }
+}
+
+fn task_page() {
+  return {
+    object: "page",
+    id: "page_task",
+    url: "https://www.notion.so/acme/Ship-triage-card-page-task",
+    created_time: "2026-04-18T09:00:00Z",
+    last_edited_time: "2026-04-19T12:34:56Z",
+    last_edited_by: {object: "user", id: "user_ada", name: "Ada Lovelace"},
+    parent: {type: "database_id", database_id: "database_tasks"},
+    properties: {
+      Name: {id: "title", type: "title", title: [{plain_text: "Ship triage card"}]},
+      Status: {id: "status", type: "status", status: {id: "in_progress", name: "In progress"}},
+      Assignee: {id: "assignee", type: "people", people: [{object: "user", id: "user_ada", name: "Ada Lovelace"}]},
+      Due: {id: "due", type: "date", date: {start: "2026-04-22"}},
+    },
+  }
+}
+
+pipeline default() {
+  let secret = "test-verification-token"
+  let webhook = normalize_inbound(fixture_raw("page_task_updated", secret))
+  expect_eq(webhook.type, "event", "webhook triage fixture emits event")
+  let triage = webhook.event.payload.triage
+  expect_eq(triage.schema, "harn.triage_event.v1", "triage schema marker")
+  expect_eq(triage.provider, "notion", "triage provider")
+  expect_eq(triage.source.kind, "task", "task-like pages are surfaced as tasks")
+  expect_eq(triage.source.id, "page_task", "triage source id")
+  expect_eq(triage.source.ref, "notion://page/page_task", "stable page ref")
+  expect_eq(
+    triage.source.url,
+    "https://www.notion.so/acme/Ship-triage-card-page-task",
+    "page URL survives normalization",
+  )
+  expect_eq(triage.source.title, "Ship triage card", "title extracted from Notion title property")
+  expect_eq(triage.source_timestamp, "2026-04-19T12:34:56Z", "triage source timestamp")
+  expect_eq(triage.actors[0].id, "user_ada", "actor promoted")
+  expect_eq(triage.provenance.page.id, "page_task", "page provenance")
+  expect_eq(triage.provenance.database.id, "database_tasks", "database provenance")
+  expect_eq(triage.task.status, "In progress", "status metadata")
+  expect_eq(triage.task.assignees[0].id, "user_ada", "assignee metadata")
+  expect_eq(triage.task.due.start, "2026-04-22", "date metadata")
+  expect_eq(triage.dedupe_key, webhook.event.dedupe_key, "triage dedupe matches event dedupe")
+  expect_eq(triage.raw_ref.field, "payload.raw", "triage points to raw payload instead of copying it")
+  expect_eq(triage.action_intents[0].kind, "dismiss", "dismiss intent")
+  expect_eq(triage.action_intents[1].kind, "snooze", "snooze intent")
+  expect_eq(triage.action_intents[2].kind, "convert_to_task", "convert-to-task intent")
+  expect_eq(triage.action_intents[2].requires_approval, true, "write-like intent requires approval")
+  expect_eq(triage.action_intents[3].method, "comments.create", "follow-up write method explicit")
+  expect_eq(triage.action_intents[3].requires_approval, true, "follow-up write requires approval")
+  let database = normalize_inbound(fixture_raw("database_created", secret))
+  expect_eq(database.event.payload.triage.source.kind, "database", "database source kind")
+  expect_eq(
+    database.event.payload.triage.source.ref,
+    "notion://database/database_projects",
+    "database ref",
+  )
+  expect_eq(
+    database.event.payload.triage.provenance.database.id,
+    "database_projects",
+    "database provenance id",
+  )
+  expect_eq(
+    database.event.payload.triage.provenance.page.id,
+    "page_home",
+    "database parent page provenance",
+  )
+  let comment = normalize_inbound(fixture_raw("comment_created", secret))
+  expect_eq(comment.event.payload.triage.source.kind, "comment", "comment source kind")
+  expect_eq(comment.event.payload.triage.source.ref, "notion://comment/comment_delta", "comment ref")
+  expect_eq(
+    comment.event.payload.triage.provenance.comment.id,
+    "comment_delta",
+    "comment provenance id",
+  )
+  expect_eq(
+    comment.event.payload.triage.provenance.page.id,
+    "page_alpha",
+    "comment parent page provenance",
+  )
+  let capabilities = method_capabilities()
+  expect_eq(
+    capabilities.get("pages.retrieve").requires_approval,
+    false,
+    "read method does not require approval",
+  )
+  expect_eq(
+    capabilities.get("pages.update").requires_approval,
+    true,
+    "write method requires approval",
+  )
+  expect_eq(
+    capabilities.get("api_call").requires_approval,
+    true,
+    "api_call is conservatively approval-gated",
+  )
+  shutdown()
+  init({api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"})
+  http_mock_clear()
+  http_mock(
+    "POST",
+    "https://notion.test/v1/data_sources/database_tasks/query",
+    {
+      status: 200,
+      body: json_stringify({object: "list", results: [task_page()], has_more: false}),
+      headers: {},
+    },
+  )
+  let polled = poll_tick(poll_ctx())
+  expect_eq(len(polled.events), 1, "poll fixture emits one event")
+  expect_eq(polled.events[0].payload.triage.source.kind, "task", "poll triage task kind")
+  expect_eq(
+    polled.events[0].payload.triage.source.url,
+    "https://www.notion.so/acme/Ship-triage-card-page-task",
+    "poll triage source URL",
+  )
+  expect_eq(polled.events[0].payload.triage.task.status, "In progress", "poll triage status")
+  expect_eq(polled.events[0].payload.triage.task.due.start, "2026-04-22", "poll triage due date")
+  http_mock_clear()
+  http_mock(
+    "GET",
+    "https://notion.test/v1/pages/no_access",
+    {
+      status: 403,
+      body: "{\"object\":\"error\",\"code\":\"restricted_resource\",\"message\":\"integration lacks access\"}",
+      headers: {"x-request-id": "req_forbidden"},
+    },
+  )
+  let forbidden = call("api_call", {request_method: "GET", path: "/pages/no_access", api_token: "secret_api"})
+  expect(is_err(forbidden), "forbidden Notion calls return Err")
+  let err = unwrap_err(forbidden)
+  expect_eq(err.code, "restricted_resource", "Notion error code preserved")
+  expect_eq(err.status, 403, "Notion status preserved")
+  expect_eq(err.auth_scope_failure.provider, "notion", "auth/scope provider marker")
+  expect_eq(err.auth_scope_failure.kind, "missing_scopes_or_resource_access", "auth/scope kind")
+  expect_eq(err.request_id, "req_forbidden", "request id preserved for support")
+  http_mock_clear()
+  shutdown()
+}

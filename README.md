@@ -68,6 +68,13 @@ Inbound webhooks:
 - Signed Notion webhook payloads are verified with `x-notion-signature` and
   normalized using the Notion `type` field as the event kind. The fixture suite
   covers `page.content_updated`, `database.created`, and `comment.created`.
+- Normalized payloads include a provider-neutral `payload.triage` projection for
+  Start My Day and other inbox workflows. It carries stable Notion refs, source
+  URLs/deep links when available, source timestamps, actors, summaries,
+  database/page/comment provenance, task status/assignee/date metadata, privacy
+  flags, the event dedupe key, and approval-gated action intents. Provider raw
+  data stays separate at `payload.raw`; `payload.triage.raw_ref` points back to
+  that field.
 
 Polling:
 
@@ -92,6 +99,11 @@ Outbound calls:
 - `api_call` is an escape hatch for Notion endpoints not yet wrapped by
   `notion-sdk-harn`.
 
+Write-capable outbound methods are also exposed through
+`method_capabilities()`. Hosts should treat methods marked
+`requires_approval = true` as approval-gated operations; the connector does not
+auto-edit pages, comments, databases, or task statuses during normalization.
+
 Operational limits:
 
 - Signed webhook normalization requires exact `raw.body_text`; parsed JSON alone
@@ -103,6 +115,9 @@ Operational limits:
 - Polling fetches one Notion query page per tick and respects
   `max_batch_size`; capped ticks leave the cursor unchanged for retry-safe
   draining.
+- Notion 401/403 and scope/resource-access failures return structured
+  `auth_scope_failure` metadata with a recovery hint so hosts can render a
+  Connect/Fix path without parsing provider-specific error strings.
 
 ## Polling Fallback
 
