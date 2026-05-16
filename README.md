@@ -5,8 +5,8 @@ webhook signatures, normalizes Notion event payloads to the canonical
 `TriggerEvent` shape, and dispatches outbound API calls via
 [notion-sdk-harn](https://github.com/burin-labs/notion-sdk-harn).
 
-> **Status: pre-alpha** — requires the pinned Harn CLI version in
-> [`.harn-version`](./.harn-version) or newer compatible Harn 0.7.x runtime.
+> **Status: v0.1.0** — production-ready first-party connector package,
+> verified with the published `harn-cli` 0.8.19 release.
 
 This is an **inbound + outbound** connector implementing the Harn Connector
 Contract v1. Its `payload_schema()` export returns the canonical
@@ -19,11 +19,17 @@ for the contract and package gate.
 
 ## Install
 
-With the pinned Harn CLI version from `.harn-version` or a newer compatible
-Harn 0.7.x runtime:
+Install the pinned Harn CLI version used by this package:
 
 ```sh
-harn add github.com/burin-labs/harn-notion-connector@main
+cargo install harn-cli --version "$(cat .harn-version)" --locked
+harn --version
+```
+
+Add the released connector package:
+
+```sh
+harn add github.com/burin-labs/harn-notion-connector@v0.1.0
 ```
 
 For local development, depend on this checkout via a path import:
@@ -118,6 +124,18 @@ Operational limits:
 - Notion 401/403 and scope/resource-access failures return structured
   `auth_scope_failure` metadata with a recovery hint so hosts can render a
   Connect/Fix path without parsing provider-specific error strings.
+
+Harn Cloud managed ingress:
+
+- Configure the package with `HARN_CLOUD_CONNECTORS_CONFIG` and map
+  `verification_token` (or `signing_secret`) to the tenant secret that stores
+  the Notion webhook verification token.
+- Managed ingress passes those mappings through `raw.metadata.secret_ids`; the
+  connector resolves them with `secret_get` during the deterministic
+  `normalize_inbound(...)` path.
+- The contract fixture named `harn-cloud managed ingress page content updated
+  webhook` exercises this load-and-normalize shape without live provider
+  credentials.
 
 ## Polling Fallback
 

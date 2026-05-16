@@ -1000,28 +1000,52 @@ fn __binding_for_raw(raw) {
 }
 
 fn __signing_secret(raw) {
-  let direct = raw?.verification_token ?? raw?.signing_secret ?? raw?.secret ?? raw?.config?.verification_token
-    ?? raw?.config?.signing_secret
-    ?? raw?.secrets?.verification_token
-    ?? raw?.secrets?.signing_secret
+  let direct = raw?.verification_token ?? raw?.signing_secret ?? raw?.secret
     ?? raw?.metadata?.verification_token
     ?? raw?.metadata?.signing_secret
     ?? raw?.metadata?.secret
-    ?? raw?.metadata?.secrets?.verification_token
-    ?? raw?.metadata?.secrets?.signing_secret
   if direct != nil && trim(to_string(direct)) != "" {
     return to_string(direct)
   }
+  let metadata_secret = __secret_alias(raw, "verification_token")
+    ?? __secret_alias(raw, "signing_secret")
+    ?? __secret_alias(raw, "secret")
+  if metadata_secret != nil && trim(to_string(metadata_secret)) != "" {
+    return metadata_secret
+  }
+  let configured = __configured_secret(
+    raw?.config?.verification_token ?? raw?.secrets?.verification_token
+      ?? raw?.metadata?.secrets?.verification_token,
+    "verification_token",
+  )
+    ?? __configured_secret(
+    raw?.config?.signing_secret ?? raw?.secrets?.signing_secret
+      ?? raw?.metadata?.secrets?.signing_secret,
+    "signing_secret",
+  )
+    ?? __configured_secret(raw?.config?.secret ?? raw?.secrets?.secret, "secret")
+  if configured != nil && trim(to_string(configured)) != "" {
+    return configured
+  }
   let binding = __binding_for_raw(raw)
-  let from_binding = binding?.verification_token ?? binding?.signing_secret ?? binding?.secret
-    ?? binding?.secrets?.verification_token
-    ?? binding?.secrets?.signing_secret
-    ?? binding?.config?.verification_token
-    ?? binding?.config?.signing_secret
-    ?? binding?.config?.secrets?.verification_token
-    ?? binding?.config?.secrets?.signing_secret
+  let from_binding = __configured_secret(
+    binding?.verification_token ?? binding?.secrets?.verification_token
+      ?? binding?.config?.verification_token
+      ?? binding?.config?.secrets?.verification_token,
+    "verification_token",
+  )
+    ?? __configured_secret(
+    binding?.signing_secret ?? binding?.secrets?.signing_secret
+      ?? binding?.config?.signing_secret
+      ?? binding?.config?.secrets?.signing_secret,
+    "signing_secret",
+  )
+    ?? __configured_secret(
+    binding?.secret ?? binding?.secrets?.secret ?? binding?.config?.secret,
+    "secret",
+  )
   if from_binding != nil && trim(to_string(from_binding)) != "" {
-    return to_string(from_binding)
+    return from_binding
   }
   let state = __state()
   let from_ctx = state?.ctx?.verification_token ?? state?.ctx?.signing_secret
@@ -1031,6 +1055,80 @@ fn __signing_secret(raw) {
     return to_string(from_ctx)
   }
   return nil
+}
+
+fn __configured_secret(value, fallback_name) {
+  if value == nil || trim(to_string(value)) == "" {
+    return nil
+  }
+  let text = trim(to_string(value))
+  if contains(text, "/") || contains(text, ".") {
+    let resolved = __secret_get_candidates(
+      [
+        __secret_id_candidate(text, fallback_name),
+        NOTION_PROVIDER_ID + "/" + to_string(fallback_name),
+        NOTION_PROVIDER_ID + "/" + to_string(fallback_name).replace("_", "-"),
+      ],
+    )
+    if resolved != nil && trim(to_string(resolved)) != "" {
+      return resolved
+    }
+  }
+  return text
+}
+
+fn __secret_alias(raw, name) {
+  let metadata = raw?.metadata ?? {}
+  let value = metadata?.secret_ids?.get(name) ?? metadata?.config?.secret_ids?.get(name)
+    ?? raw?.config?.secret_ids?.get(name)
+    ?? raw?.secrets?.secret_ids?.get(name)
+  if value == nil || trim(to_string(value)) == "" {
+    return nil
+  }
+  return __secret_get_candidates(
+    [
+      __secret_id_candidate(value, name),
+      NOTION_PROVIDER_ID + "/" + to_string(name),
+      NOTION_PROVIDER_ID + "/" + to_string(name).replace("_", "-"),
+    ],
+  )
+}
+
+fn __secret_id_candidate(value, fallback_name) {
+  if value == nil || trim(to_string(value)) == "" {
+    return nil
+  }
+  let text = trim(to_string(value))
+  if contains(text, "/") {
+    return text
+  }
+  if fallback_name != nil && trim(to_string(fallback_name)) != "" {
+    return NOTION_PROVIDER_ID + "/" + to_string(fallback_name)
+  }
+  return nil
+}
+
+fn __secret_get_candidates(secret_ids) {
+  for secret_id in secret_ids ?? [] {
+    let secret = __secret_get_optional(secret_id)
+    if secret != nil && trim(to_string(secret)) != "" {
+      return secret
+    }
+  }
+  return nil
+}
+
+fn __secret_get_optional(secret_id) {
+  if secret_id == nil || trim(to_string(secret_id)) == "" {
+    return nil
+  }
+  let resolved = try {
+    secret_get(to_string(secret_id))
+  }
+  if is_err(resolved) {
+    return nil
+  }
+  return to_string(unwrap(resolved))
 }
 
 fn __verify_notion_signature(raw, headers, body_text) {
@@ -1068,6 +1166,12 @@ fn __normalize_event(event_type, payload, raw) {
       nil
     } else {
       resource_id
+    },
+    entity: payload?.entity
+      ?? if resource_id == "" {
+      nil
+    } else {
+      {id: resource_id, type: entity_type, parent: payload?.parent}
     },
     entity_type: entity_type,
     api_version: payload?.api_version,
@@ -1937,6 +2041,7 @@ fn __build_poll_event(binding, page, previous_snapshot) {
     integration_id: nil,
     attempt_number: nil,
     entity_id: to_string(page.id),
+    entity: {id: to_string(page.id), type: page?.object ?? "page", parent: page?.parent},
     entity_type: page?.object ?? "page",
     api_version: binding?.notion_version,
     verification_token: nil,
