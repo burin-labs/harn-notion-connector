@@ -5,8 +5,8 @@ webhook signatures, normalizes Notion event payloads to the canonical
 `TriggerEvent` shape, and dispatches outbound API calls via
 [notion-sdk-harn](https://github.com/burin-labs/notion-sdk-harn).
 
-> **Status: v0.1.0** — production-ready first-party connector package,
-> verified with the published `harn-cli` 0.8.19 release.
+> **Status: v0.1.0** — first-party connector package verified with the
+> `harn-cli` version pinned in `.harn-version`.
 
 This is an **inbound + outbound** connector implementing the Harn Connector
 Contract v1. Its `payload_schema()` export returns the canonical
@@ -85,8 +85,8 @@ Inbound webhooks:
 Polling:
 
 - `poll_tick(ctx)` supports `resource = "data_source"` and
-  `resource = "database"` bindings. It emits normalized `page.content_updated`
-  events for changed query results.
+  `resource = "database"` bindings. Each tick emits normalized
+  `page.content_updated` events for changed query results.
 
 Outbound calls:
 
@@ -103,7 +103,7 @@ Outbound calls:
   `comments.*`, `users.*`, `file_uploads.*`, `custom_emojis.list`,
   `search.query`, `views.*`, `views.queries.*`.
 - `api_call` is an escape hatch for Notion endpoints not yet wrapped by
-  `notion-sdk-harn`.
+  `notion-sdk-harn`. Non-GET `api_call` requests require `approved = true`.
 
 Write-capable outbound methods are also exposed through
 `method_capabilities()`. Hosts should treat methods marked
@@ -112,18 +112,24 @@ auto-edit pages, comments, databases, or task statuses during normalization.
 
 Operational limits:
 
-- Signed webhook normalization requires exact `raw.body_text`; parsed JSON alone
-  is rejected because HMAC verification must use the original request body.
+- Signed webhook normalization requires the exact retained request body. The
+  connector prefers `raw.raw_body` when the host supplies it and falls back to
+  `raw.body_text`; parsed JSON alone is rejected because HMAC verification must
+  use the original request body.
 - `normalize_inbound(raw)` is deterministic and does not perform network I/O.
 - Harn owns webhook routing, poll schedules, leases, retry policy, durable
-  cursor/state, and secret resolution. This connector only validates and
-  normalizes inbound payloads, dispatches SDK calls, and returns poll results.
+  cursor/state, and secret storage. This connector validates and normalizes
+  inbound payloads, resolves Harn-managed secret IDs passed in binding or
+  managed-ingress metadata, dispatches SDK calls, and returns poll results.
 - Polling fetches one Notion query page per tick and respects
   `max_batch_size`; capped ticks leave the cursor unchanged for retry-safe
   draining.
 - Notion 401/403 and scope/resource-access failures return structured
   `auth_scope_failure` metadata with a recovery hint so hosts can render a
   Connect/Fix path without parsing provider-specific error strings.
+- `secrets.api_token`, `verification_token`, and `signing_secret` may be
+  literal values or Harn secret IDs. Secret IDs with slash or dotted Harn Cloud
+  names are resolved with `secret_get` before use.
 
 Harn Cloud managed ingress:
 
@@ -214,9 +220,10 @@ See Notion's official docs for
 
 ### Local Webhook Testing
 
-Use `normalize_inbound(raw)` with the exact raw body text received by your HTTP
-listener. Signature verification is computed over `raw.body_text`; parsed JSON
-alone is intentionally rejected for signed webhook events.
+Use `normalize_inbound(raw)` with the exact retained request body received by
+your HTTP listener. Signature verification is computed over `raw.raw_body` when
+present, otherwise `raw.body_text`; parsed JSON alone is intentionally rejected
+for signed webhook events.
 
 ```harn
 let raw = {

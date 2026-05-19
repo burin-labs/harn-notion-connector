@@ -66,6 +66,17 @@ pipeline default() {
   let unsupported = call("workspaces.retrieve", {workspace_id: "workspace_1"})
   expect(is_err(unsupported), "unsupported method rejected")
   expect_eq(unwrap_err(unsupported).code, "method_not_found", "unsupported method code")
+  let unapproved_api_call = call("api_call", {request_method: "POST", path: "/pages", body: {parent: {page_id: "page_123"}}})
+  expect(is_err(unapproved_api_call), "write-like api_call requires approval")
+  expect_eq(unwrap_err(unapproved_api_call).code, "approval_required", "api_call approval code")
+  let missing_auth = call("pages.retrieve", {page_id: "page_123", api_token: ""})
+  expect(is_err(missing_auth), "empty api token rejects before dispatch")
+  expect_eq(unwrap_err(missing_auth).code, "missing_api_token", "missing api token code")
+  expect_eq(
+    unwrap_err(missing_auth).auth_scope_failure.kind,
+    "missing_auth",
+    "missing api token recovery",
+  )
   http_mock_clear()
   shutdown()
 }

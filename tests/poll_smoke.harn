@@ -145,5 +145,24 @@ pipeline default() {
   expect_eq(len(drained.events), 1, "next capped tick drains the next uncached event")
   expect_eq(drained.events[0].payload.resource_id, "page_b", "drained tick emits second event")
   http_mock_clear()
+  http_mock(
+    "POST",
+    base + "/data_sources/ds_123/query",
+    {
+      responses: [
+        {
+          status: 200,
+          body: list_body([page("page_page_1", "2026-04-19T10:30:00Z")], true, "cursor-next"),
+          headers: {},
+        },
+        {status: 200, body: list_body([page("page_page_2", "2026-04-19T10:35:00Z")]), headers: {}},
+      ],
+    },
+  )
+  let first_page_only = poll_tick(poll_ctx(nil, nil))
+  expect_eq(len(first_page_only.events), 1, "poll tick emits the first query page")
+  expect_eq(first_page_only.events[0].payload.resource_id, "page_page_1", "first query page event")
+  expect_eq(len(http_mock_calls()), 1, "poll tick does not chase provider pagination in one tick")
+  http_mock_clear()
   shutdown()
 }

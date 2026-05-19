@@ -84,6 +84,9 @@ jobs:
       - name: Connector package gate
         run: harn connector test "$GITHUB_WORKSPACE" --provider notion --run-poll-tick
 
+      - name: Package publish dry run
+        run: harn package pack --dry-run "$GITHUB_WORKSPACE"
+
   ci-status:
     name: CI status
     if: always()
