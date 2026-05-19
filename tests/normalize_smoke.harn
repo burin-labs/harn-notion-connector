@@ -22,6 +22,16 @@ pipeline default() {
   expect_eq(page.event.payload.actor.id, "user_ada", "page actor id")
   expect_eq(page.event.payload.occurred_at, "2026-04-19T12:34:56Z", "page occurred_at")
   expect(page.event.dedupe_key != "" && page.event.dedupe_key != nil, "page dedupe key populated")
+  let raw_body = normalize_inbound(
+    {
+      verification_token: secret,
+      raw_body: bytes_from_string(fixture_body("page_content_updated")),
+      headers: notion_headers(secret, fixture_body("page_content_updated")),
+      received_at: "2026-04-19T12:40:00Z",
+    },
+  )
+  expect_eq(raw_body.type, "event", "raw_body envelope type")
+  expect_eq(raw_body.event.kind, "page.content_updated", "raw_body event kind")
   let database = normalize_inbound(fixture_raw("database_created", secret))
   expect_eq(database.event.kind, "database.created", "database event kind")
   expect_eq(database.event.payload.event, "database.created", "database provider payload event")
@@ -46,6 +56,24 @@ pipeline default() {
   )
   expect_eq(tampered.type, "reject", "tampered body rejects")
   expect_eq(tampered.reject.status, 401, "tampered body status")
+  let unsigned_non_verification = normalize_inbound(
+    {
+      body_text: json_stringify(
+        {
+          id: "evt_unsigned",
+          type: "page.content_updated",
+          verification_token: "token-from-payload",
+          entity: {id: "page_unsigned", type: "page"},
+        },
+      ),
+      headers: {},
+    },
+  )
+  expect_eq(
+    unsigned_non_verification.type,
+    "reject",
+    "non-verification payloads still require signatures",
+  )
   let missing_signature = normalize_inbound({verification_token: secret, body_text: event_body, headers: {}})
   expect_eq(missing_signature.type, "reject", "missing signature rejects")
   let wrong_length = normalize_inbound(
