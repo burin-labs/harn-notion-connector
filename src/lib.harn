@@ -289,9 +289,9 @@ pub fn shutdown() {
 /**
  * Verify and normalize a raw Notion webhook body into NormalizeResult v1.
  *
- * Notion sends webhook JSON as UTF-8. Until Harn exposes raw body bytes to
- * pure-Harn connectors, signature verification intentionally uses
- * raw.body_text and rejects callers that only provide a parsed body.
+ * Notion sends webhook JSON as UTF-8. Signature verification uses the exact
+ * retained request body from raw.raw_body or raw.body_text and rejects callers
+ * that only provide a parsed body.
  */
 pub fn normalize_inbound(raw) {
   let body_text = __body_text(raw)
@@ -305,7 +305,9 @@ pub fn normalize_inbound(raw) {
     return __reject(400, "invalid_json", "notion payload body is not valid JSON")
   }
   let payload = unwrap(parsed)
-  if payload?.verification_token != nil && trim(to_string(payload.verification_token)) != "" {
+  if payload?.type == "subscription.verification"
+    && payload?.verification_token != nil
+    && trim(to_string(payload.verification_token)) != "" {
     let event = __build_event("subscription.verification", payload, raw, "unsigned")
     return {type: "event", event: event}
   }
@@ -823,6 +825,12 @@ pub fn call(method, args = {}) {
     if path == nil || path == "" {
       return __err("invalid_args", "api_call requires path")
     }
+    if __requires_api_call_approval(request_method) && !(args?.approved ?? false) {
+      return __err(
+        "approval_required",
+        "api_call with " + to_string(request_method) + " requires approved = true",
+      )
+    }
     return __notion_request(
       to_string(request_method),
       __notion_api_url(cfg.api_base_url, to_string(path)),
@@ -957,13 +965,24 @@ fn __reject_err(err) {
 }
 
 fn __body_text(raw) {
+  if raw?.raw_body != nil {
+    let decoded = try {
+      bytes_to_string(raw.raw_body)
+    }
+    if is_ok(decoded) {
+      return Ok(unwrap(decoded))
+    }
+  }
   if raw?.body_text != nil && type_of(raw.body_text) == "string" {
     return Ok(raw.body_text)
   }
   if raw?.body != nil && type_of(raw.body) == "string" {
     return Ok(raw.body)
   }
-  return __err("missing_body_text", "notion normalize_inbound requires raw.body_text for HMAC verification")
+  return __err(
+    "missing_body_text",
+    "notion normalize_inbound requires raw.raw_body or raw.body_text for HMAC verification",
+  )
 }
 
 fn __header(headers, name) {
@@ -998,18 +1017,17 @@ fn __binding_for_raw(raw) {
 }
 
 fn __signing_secret(raw) {
-  let direct = raw?.verification_token ?? raw?.signing_secret ?? raw?.secret
-    ?? raw?.metadata?.verification_token
-    ?? raw?.metadata?.signing_secret
-    ?? raw?.metadata?.secret
+  let direct = __configured_secret(raw?.verification_token, "verification_token")
+    ?? __configured_secret(raw?.signing_secret, "signing_secret")
+    ?? __configured_secret(raw?.secret, "secret")
   if direct != nil && trim(to_string(direct)) != "" {
-    return to_string(direct)
+    return direct
   }
-  let metadata_secret = __secret_alias(raw, "verification_token")
+  let metadata_alias = __secret_alias(raw, "verification_token")
     ?? __secret_alias(raw, "signing_secret")
     ?? __secret_alias(raw, "secret")
-  if metadata_secret != nil && trim(to_string(metadata_secret)) != "" {
-    return metadata_secret
+  if metadata_alias != nil && trim(to_string(metadata_alias)) != "" {
+    return metadata_alias
   }
   let configured = __configured_secret(
     raw?.config?.verification_token ?? raw?.secrets?.verification_token
@@ -1024,6 +1042,12 @@ fn __signing_secret(raw) {
     ?? __configured_secret(raw?.config?.secret ?? raw?.secrets?.secret, "secret")
   if configured != nil && trim(to_string(configured)) != "" {
     return configured
+  }
+  let metadata_secret = __configured_secret(raw?.metadata?.verification_token, "verification_token")
+    ?? __configured_secret(raw?.metadata?.signing_secret, "signing_secret")
+    ?? __configured_secret(raw?.metadata?.secret, "secret")
+  if metadata_secret != nil && trim(to_string(metadata_secret)) != "" {
+    return metadata_secret
   }
   let binding = __binding_for_raw(raw)
   let from_binding = __configured_secret(
@@ -1097,7 +1121,7 @@ fn __secret_id_candidate(value, fallback_name) {
     return nil
   }
   let text = trim(to_string(value))
-  if contains(text, "/") {
+  if contains(text, "/") || contains(text, ".") {
     return text
   }
   if fallback_name != nil && trim(to_string(fallback_name)) != "" {
@@ -1764,8 +1788,20 @@ fn __outbound_config(args) {
     ?? env_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
     ?? env_or("NOTION_VERSION", NOTION_API_VERSION)
-  let api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token ?? __state()?.ctx?.api_token
-    ?? __state()?.ctx?.secrets?.api_token
+  let explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
+  if explicit_api_token != nil && trim(to_string(explicit_api_token)) == "" {
+    return Err(
+      {
+        code: "missing_api_token",
+        message: "notion connector requires api_token",
+        auth_scope_failure: __auth_scope_failure(nil, "missing_api_token"),
+      },
+    )
+  }
+  let api_token = __configured_secret(
+    explicit_api_token ?? __state()?.ctx?.api_token ?? __state()?.ctx?.secrets?.api_token,
+    "api-token",
+  )
     ?? env("NOTION_TOKEN")
   if api_token == nil || trim(to_string(api_token)) == "" {
     return Err(
@@ -1816,6 +1852,11 @@ fn __call_body(args) {
   body.remove("path")
   body.remove("body")
   return body
+}
+
+fn __requires_api_call_approval(method) {
+  let normalized = uppercase(to_string(method ?? "GET"))
+  return normalized != "GET" && normalized != "HEAD" && normalized != "OPTIONS"
 }
 
 fn __required_id(args, field, method) {
@@ -2121,59 +2162,43 @@ fn __normalize_poll_binding(binding) {
 
 @complexity(allow)
 fn __query_pages_since(binding, high_water) {
-  var start_cursor = nil
-  var pages = []
-  while true {
-    var filters = []
-    if binding?.filter != nil {
-      filters = filters + [binding.filter]
-    }
-    if high_water != nil {
-      filters = filters
-        + [{timestamp: binding.high_water_mark, [binding.high_water_mark]: {after: high_water}}]
-    }
-    let filter = if len(filters) == 0 {
-      nil
-    } else if len(filters) == 1 {
-      filters[0]
-    } else {
-      {and: filters}
-    }
-    let sorts = if len(binding?.sorts ?? []) == 0 {
-      [{timestamp: binding.high_water_mark, direction: "ascending"}]
-    } else {
-      binding.sorts
-    }
-    var args = {
-      api_base_url: binding?.api_base_url,
-      api_token: binding?.api_token,
-      notion_version: binding?.notion_version,
-      page_size: binding.page_size,
-      sorts: sorts,
-    }
-    if filter != nil {
-      args.filter = filter
-    }
-    if start_cursor != nil {
-      args.start_cursor = start_cursor
-    }
-    let response = if binding.resource == "data_source" {
-      call("data_sources.query", args + {data_source_id: binding.resource_id})
-    } else {
-      call("databases.query", args + {database_id: binding.resource_id})
-    }
-    if is_err(response) {
-      return response
-    }
-    let payload = unwrap(response)
-    pages = pages + payload?.results ?? []
-    if !(payload?.has_more ?? false) {
-      break
-    }
-    start_cursor = payload?.next_cursor
-    if start_cursor == nil || start_cursor == "" {
-      break
-    }
+  var filters = []
+  if binding?.filter != nil {
+    filters = filters + [binding.filter]
   }
-  return Ok(pages)
+  if high_water != nil {
+    filters = filters
+      + [{timestamp: binding.high_water_mark, [binding.high_water_mark]: {after: high_water}}]
+  }
+  let filter = if len(filters) == 0 {
+    nil
+  } else if len(filters) == 1 {
+    filters[0]
+  } else {
+    {and: filters}
+  }
+  let sorts = if len(binding?.sorts ?? []) == 0 {
+    [{timestamp: binding.high_water_mark, direction: "ascending"}]
+  } else {
+    binding.sorts
+  }
+  var args = {
+    api_base_url: binding?.api_base_url,
+    api_token: binding?.api_token,
+    notion_version: binding?.notion_version,
+    page_size: binding.page_size,
+    sorts: sorts,
+  }
+  if filter != nil {
+    args.filter = filter
+  }
+  let response = if binding.resource == "data_source" {
+    call("data_sources.query", args + {data_source_id: binding.resource_id})
+  } else {
+    call("databases.query", args + {database_id: binding.resource_id})
+  }
+  if is_err(response) {
+    return response
+  }
+  return Ok(unwrap(response)?.results ?? [])
 }

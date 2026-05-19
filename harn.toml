@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Pure-Harn Notion trigger connector: webhooks, polling, and outbound API dispatch."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/burin-labs/harn-notion-connector"
+harn = ">=0.8,<0.9"
+docs_url = "README.md"
+provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.0"
 
 [exports]
 default = "src/lib.harn"
@@ -11,6 +14,13 @@ default = "src/lib.harn"
 [[providers]]
 id = "notion"
 connector = { harn = "src/lib.harn" }
+capabilities = ["webhook", "oauth", "pagination"]
+
+[providers.oauth]
+resource = "https://api.notion.com/"
+authorization_endpoint = "https://api.notion.com/v1/oauth/authorize"
+token_endpoint = "https://api.notion.com/v1/oauth/token"
+token_endpoint_auth_method = "client_secret_basic"
 
 [providers.setup]
 auth_type = "oauth2"
@@ -40,7 +50,7 @@ transient_provider_outage = "Retry after Notion API and webhook delivery endpoin
 # Publishable dependencies must be git-backed so this package resolves from a
 # clean consumer project without a sibling checkout.
 [dependencies]
-notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", branch = "main" }
+notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", rev = "ed555fa2ca4b23188c16b12b8a6655d4bef504eb" }
 
 [connector_contract]
 version = 1
