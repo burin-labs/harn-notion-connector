@@ -1,19 +1,19 @@
 # harn-notion-connector
 
-Pure-Harn Notion connector for the Harn orchestrator. Verifies inbound
-webhook signatures, normalizes Notion event payloads to the canonical
-`TriggerEvent` shape, and dispatches outbound API calls via
+Notion connector for Harn. It verifies inbound webhook signatures, normalizes
+Notion event payloads to the canonical `TriggerEvent` shape, and dispatches
+outbound API calls through
 [notion-sdk-harn](https://github.com/burin-labs/notion-sdk-harn).
 
-> **Status: v0.1.0** — first-party connector package verified with the
-> `harn-cli` version pinned in `.harn-version`.
+Status: v0.1.0. This package is verified with the `harn-cli` version pinned in
+`.harn-version`.
 
 This is an **inbound + outbound** connector implementing the Harn Connector
 Contract v1. Its `payload_schema()` export returns the canonical
 `{ harn_schema_name, json_schema }` shape, `normalize_inbound(...)` returns
 `NormalizeResult` v1 variants, and `poll_tick(...)` returns Harn-managed
-cursor/state updates. It complements the typed SDK at `notion-sdk-harn`, which
-it imports for its outbound API surface. See the canonical
+cursor/state updates. It imports `notion-sdk-harn` for outbound API methods.
+See the canonical
 [Harn connector authoring docs](https://docs.harnlang.com/connectors/authoring.html)
 for the contract and package gate.
 
@@ -52,7 +52,7 @@ trigger watch_database on notion {
   }
   on event {
     let page = notion_connector.call("pages.retrieve", {
-      page_id: event.resource_id,
+      page_id: event.payload.resource_id,
       api_token: env("NOTION_TOKEN"),
     })
     println("Updated: ${page.properties.Title.title[0].plain_text}")
@@ -63,9 +63,9 @@ trigger watch_database on notion {
 The connector exports the standard Harn Connector interface:
 `provider_id()`, `kinds()`, `payload_schema()`, `init(ctx)`,
 `activate(bindings)`, `shutdown()`, `normalize_inbound(raw)`,
-`call(method, args)`, and `poll_tick(ctx)`.
+`call(method, args)`, `poll_tick(ctx)`, and `method_capabilities()`.
 
-## Supported Surface
+## Supported surface
 
 Inbound webhooks:
 
@@ -146,7 +146,7 @@ Harn Cloud managed ingress:
   webhook` exercises this load-and-normalize shape without live provider
   credentials.
 
-## Polling Fallback
+## Polling fallback
 
 Use a `kind = "poll"` Notion binding when webhooks are unavailable or as a
 fallback watcher. Harn owns the schedule, lease, cursor, and connector state;
@@ -154,11 +154,24 @@ the connector only reads `ctx.cursor` / `ctx.state` and returns the next
 `{ events, cursor, state }`.
 
 ```toml
+[[triggers]]
+id = "notion.poll"
 provider = "notion"
 kind = "poll"
 handler = "on_notion_page_change"
-poll = { interval = "5m", jitter = "30s", state_key = "notion:workspace:tasks", max_batch_size = 50, resource = "data_source", data_source_id = "$NOTION_DATA_SOURCE_ID", high_water_mark = "last_edited_time", page_size = 50 }
-secrets = { api_token = "notion/api-token" }
+
+[triggers.poll]
+interval = "5m"
+jitter = "30s"
+state_key = "notion:workspace:tasks"
+max_batch_size = 50
+resource = "data_source"
+data_source_id = "$NOTION_DATA_SOURCE_ID"
+high_water_mark = "last_edited_time"
+page_size = 50
+
+[triggers.secrets]
+api_token = "notion/api-token"
 ```
 
 `poll.interval` may also be supplied as `interval_ms` or `interval_secs`.
@@ -168,7 +181,7 @@ normalized payload shape and dedupe key as webhook-ingested Notion events.
 
 ## Configuration
 
-### Required Secrets
+### Required secrets
 
 For inbound webhooks, store the Notion webhook `verification_token` captured
 during subscription verification and pass it through the trigger binding as
@@ -195,15 +208,15 @@ development.
 
 ```harn
 init({
-  api_token: env("NOTION_TOKEN"),
+  api_token: harness.env.get("NOTION_TOKEN"),
   notion_version: "2026-03-11",
 })
 ```
 
-### Notion Capabilities
+### Notion capabilities
 
-Grant the minimum Notion capabilities for the methods you call. The common MVP
-set is:
+Grant the minimum Notion capabilities for the methods you call. Most workflows
+start with:
 
 - `Read content` for retrieving blocks, pages, databases, data sources, search,
   views, polling queries, and markdown reads.
@@ -221,7 +234,7 @@ See Notion's official docs for
 [webhook verification](https://developers.notion.com/reference/webhooks), and
 [comments capabilities](https://developers.notion.com/guides/data-apis/working-with-comments).
 
-### Local Webhook Testing
+### Local webhook testing
 
 Use `normalize_inbound(raw)` with the exact retained request body received by
 your HTTP listener. Signature verification is computed over `raw.raw_body` when
@@ -229,9 +242,12 @@ present, otherwise `raw.body_text`; parsed JSON alone is intentionally rejected
 for signed webhook events.
 
 ```harn
+let body_text = harness.fs.read_text(
+  "tests/fixtures/webhooks/page_content_updated.json",
+)
 let raw = {
-  verification_token: env("NOTION_VERIFICATION_TOKEN"),
-  body_text: read_file("tests/fixtures/webhooks/page_content_updated.json"),
+  verification_token: harness.env.get("NOTION_VERIFICATION_TOKEN"),
+  body_text: body_text,
   headers: {
     ["x-notion-signature"]: "sha256=...",
     ["request-id"]: "req_local",
@@ -241,19 +257,14 @@ let result = notion_connector.normalize_inbound(raw)
 ```
 
 The package also declares `[[connector_contract.fixtures]]` in `harn.toml`.
-`harn connector check .` runs those signed fixtures through the same
-`normalize_inbound` adapter used by Harn connector hosts.
+`harn connector test "$PWD" --provider notion --run-poll-tick` runs those
+signed fixtures through the same `normalize_inbound` adapter used by Harn
+connector hosts.
 
 ## Development
 
-Install the pinned Harn CLI from crates.io:
-
-```sh
-cargo install harn-cli --version "$(cat .harn-version)" --locked
-harn --version
-```
-
-Run the local CI equivalent from this repo:
+Use the pinned Harn CLI from the install step. Then run the local CI equivalent
+from this repo:
 
 ```sh
 harn install

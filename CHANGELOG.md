@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Cleaned repo-local agent guidance and README examples.
+- Swapped deprecated ambient Harn helpers for `harness.*` APIs in the connector
+  and tests.
 - Adopted current Harn package metadata: explicit compatibility range,
   provider capability coverage, OAuth endpoint metadata, pinned SDK dependency,
   refreshed lockfile provenance, and package pack verification in CI.

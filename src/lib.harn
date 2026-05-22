@@ -1826,9 +1826,9 @@ fn __triage_action_intents(source_kind, source_id) {
 
 fn __outbound_config(args) {
   let api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
-    ?? env_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
+    ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
-    ?? env_or("NOTION_VERSION", NOTION_API_VERSION)
+    ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   let explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
   if explicit_api_token != nil && trim(to_string(explicit_api_token)) == "" {
     return Err(
@@ -1843,7 +1843,7 @@ fn __outbound_config(args) {
     explicit_api_token ?? __state()?.ctx?.api_token ?? __state()?.ctx?.secrets?.api_token,
     "api-token",
   )
-    ?? env("NOTION_TOKEN")
+    ?? harness.env.get("NOTION_TOKEN")
   if api_token == nil || trim(to_string(api_token)) == "" {
     return Err(
       {
@@ -1864,21 +1864,21 @@ fn __outbound_config(args) {
 
 fn __oauth_config(args) {
   let api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
-    ?? env_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
+    ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
-    ?? env_or("NOTION_VERSION", NOTION_API_VERSION)
+    ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   let client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
     ?? __state()?.ctx?.client_id
     ?? __state()?.ctx?.oauth?.client_id
     ?? __state()?.ctx?.secrets?.client_id
-    ?? env("NOTION_CLIENT_ID")
+    ?? harness.env.get("NOTION_CLIENT_ID")
   let explicit_client_secret = args?.client_secret ?? args?.oauth?.client_secret
     ?? args?.secrets?.client_secret
     ?? __state()?.ctx?.client_secret
     ?? __state()?.ctx?.oauth?.client_secret
     ?? __state()?.ctx?.secrets?.client_secret
   let client_secret = __configured_secret(explicit_client_secret, "client-secret")
-    ?? env("NOTION_CLIENT_SECRET")
+    ?? harness.env.get("NOTION_CLIENT_SECRET")
   if client_id == nil || trim(to_string(client_id)) == "" || client_secret == nil
     || trim(to_string(client_secret)) == "" {
     return Err(
@@ -2000,7 +2000,8 @@ fn __notion_headers(cfg) {
 
 fn __notion_request(method, url, body, cfg) {
   let response = try {
-    http_request(
+    harness.net
+      .request(
       method,
       url,
       {
