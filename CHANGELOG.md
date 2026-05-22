@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pinned `notion-sdk-harn` to its tagged `v0.1.0` release
+  (commit `bad580c5fbe8ede612b2748ad98606642ce2fc02`) instead of a bare
+  branch-tip SHA. Fresh installs are now reproducible without depending on
+  whoever last pushed to `notion-sdk-harn`'s `main`. Documented the bump
+  workflow in [`README.md`](./README.md#updating-the-notion-sdk).
 - Cleaned repo-local agent guidance and README examples.
 - Swapped deprecated ambient Harn helpers for `harness.*` APIs in the connector
   and tests.

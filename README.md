@@ -271,6 +271,24 @@ harn install
 harn connector test "$PWD" --provider notion --run-poll-tick
 ```
 
+### Updating the Notion SDK
+
+`harn.toml` pins `notion-sdk-harn` to a tagged release (currently
+[`v0.1.0`](https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.1.0)).
+To bump:
+
+```sh
+# 1. Edit harn.toml — bump the rev = "vX.Y.Z" pin.
+# 2. Refresh the lockfile from the new tag.
+harn install --refetch notion-sdk-harn --locked
+# 3. Note the bump in CHANGELOG.md (Unreleased section) with the SDK version
+#    and the commit SHA the lockfile now records.
+```
+
+Never track `branch = "main"` here — every release of the SDK should
+correspond to an entry in `burin-labs/harn-cloud/package-index/`, and only
+tagged pins reproduce across the team and CI.
+
 ## License
 
 Dual-licensed under MIT and Apache-2.0.
