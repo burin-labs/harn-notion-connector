@@ -102,6 +102,9 @@ Outbound calls:
 - Comments, users, files, custom emojis, search, and views:
   `comments.*`, `users.*`, `file_uploads.*`, `custom_emojis.list`,
   `search.query`, `views.*`, `views.queries.*`.
+- OAuth token helpers: `oauth.token.create`, `oauth.token.introspect`, and
+  `oauth.token.revoke` use Notion OAuth client credentials and keep the target
+  token in the request body only for introspection/revocation.
 - `api_call` is an escape hatch for Notion endpoints not yet wrapped by
   `notion-sdk-harn`. Non-GET `api_call` requests require `approved = true`.
 

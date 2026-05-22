@@ -4,7 +4,11 @@ import {
   create_a_comment_variant1,
   create_a_comment_variant2,
   create_a_comment_variant3,
+  create_a_comment_variant4,
   create_a_database,
+  create_a_token,
+  create_a_token_variant1,
+  create_a_token_variant2,
   create_database,
   create_file,
   create_view,
@@ -18,6 +22,7 @@ import {
   get_user,
   get_users,
   get_view_query_results,
+  introspect_token,
   list_comments,
   list_custom_emojis,
   list_data_source_templates,
@@ -39,6 +44,7 @@ import {
   retrieve_database,
   retrieve_file_upload,
   retrieve_page_markdown,
+  revoke_token,
   update_a_block,
   update_a_comment,
   update_a_data_source,
@@ -102,6 +108,9 @@ let NOTION_OUTBOUND_METHODS = [
   "views.queries.results",
   "views.queries.retrieve",
   "views.queries.delete",
+  "oauth.token.create",
+  "oauth.token.introspect",
+  "oauth.token.revoke",
   "api_call",
 ]
 
@@ -128,10 +137,26 @@ let NOTION_WRITE_METHODS = [
   "views.delete",
   "views.queries.create",
   "views.queries.delete",
+  "oauth.token.create",
+  "oauth.token.revoke",
   "api_call",
 ]
 
 let NOTION_TRIAGE_SCHEMA = "harn.triage_event.v1"
+
+let NOTION_CONTROL_ARG_FIELDS = [
+  "api_base_url",
+  "api_token",
+  "token",
+  "api_token_secret",
+  "notion_version",
+  "secrets",
+  "client_id",
+  "client_secret",
+  "client_secret_secret",
+  "oauth",
+  "approved",
+]
 
 /** Return this connector's Harn provider id. */
 pub fn provider_id() {
@@ -325,6 +350,9 @@ pub fn call(method, args = {}) {
   if !contains(NOTION_OUTBOUND_METHODS, method) {
     return __err("method_not_found", "notion connector does not implement outbound method `" + method + "`")
   }
+  if to_string(method).starts_with("oauth.") {
+    return __oauth_call(method, args ?? {})
+  }
   let config = __outbound_config(args ?? {})
   if is_err(config) {
     return config
@@ -348,7 +376,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_a_block(__sdk_client(cfg), unwrap(block_id), __call_body(args))
+        update_a_block(__sdk_client(cfg), unwrap(block_id), __call_body(args, ["block_id", "id"]))
       },
     )
   }
@@ -399,7 +427,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        patch_page(__sdk_client(cfg), unwrap(page_id), __call_body(args))
+        patch_page(__sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
       },
     )
   }
@@ -421,7 +449,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_page_markdown(__sdk_client(cfg), unwrap(page_id), __call_body(args))
+        update_page_markdown(__sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
       },
     )
   }
@@ -432,7 +460,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        move_page(__sdk_client(cfg), unwrap(page_id), __call_body(args))
+        move_page(__sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
       },
     )
   }
@@ -482,7 +510,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_database(__sdk_client(cfg), unwrap(database_id), __call_body(args))
+        update_database(__sdk_client(cfg), unwrap(database_id), __call_body(args, ["database_id", "id"]))
       },
     )
   }
@@ -497,7 +525,7 @@ pub fn call(method, args = {}) {
         cfg.api_base_url,
         "/databases/" + url_encode(to_string(unwrap(database_id))) + "/query",
       ),
-      __call_body(args),
+      __call_body(args, ["database_id", "id"]),
       cfg,
     )
   }
@@ -526,7 +554,11 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_a_data_source(__sdk_client(cfg), unwrap(data_source_id), __call_body(args))
+        update_a_data_source(
+          __sdk_client(cfg),
+          unwrap(data_source_id),
+          __call_body(args, ["data_source_id", "id"]),
+        )
       },
     )
   }
@@ -540,7 +572,7 @@ pub fn call(method, args = {}) {
         post_database_query(
           __sdk_client(cfg),
           unwrap(data_source_id),
-          __call_body(args),
+          __call_body(args, ["data_source_id", "id", "filter_properties"]),
           args?.filter_properties,
         )
       },
@@ -568,7 +600,7 @@ pub fn call(method, args = {}) {
     if block_id == nil || block_id == "" {
       return __err("invalid_args", "blocks.children.append requires block_id")
     }
-    var body = __call_body(args)
+    var body = __call_body(args, ["block_id", "page_id", "id", "blocks"])
     if body?.children == nil && args?.blocks != nil {
       body.children = args.blocks
     }
@@ -587,7 +619,9 @@ pub fn call(method, args = {}) {
   }
   if method == "comments.create" {
     let body = __call_body(args)
-    let variant = if body?.markdown != nil {
+    let variant = if body?.discussion_id != nil && body?.markdown != nil {
+      create_a_comment_variant4(body.discussion_id, body.markdown)
+    } else if body?.markdown != nil {
       create_a_comment_variant2(body.markdown, body?.parent ?? {})
     } else if body?.discussion_id != nil {
       create_a_comment_variant3(body.discussion_id, body?.rich_text ?? [])
@@ -625,7 +659,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_a_comment(__sdk_client(cfg), unwrap(comment_id), __call_body(args))
+        update_a_comment(__sdk_client(cfg), unwrap(comment_id), __call_body(args, ["comment_id", "id"]))
       },
     )
   }
@@ -690,7 +724,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        upload_file(__sdk_client(cfg), unwrap(file_upload_id), __call_body(args))
+        upload_file(__sdk_client(cfg), unwrap(file_upload_id), __call_body(args, ["file_upload_id", "id"]))
       },
     )
   }
@@ -757,7 +791,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_a_view(__sdk_client(cfg), unwrap(view_id), __call_body(args))
+        update_a_view(__sdk_client(cfg), unwrap(view_id), __call_body(args, ["view_id", "id"]))
       },
     )
   }
@@ -779,7 +813,7 @@ pub fn call(method, args = {}) {
     }
     return __sdk_result(
       try {
-        create_view_query(__sdk_client(cfg), unwrap(view_id), __call_body(args))
+        create_view_query(__sdk_client(cfg), unwrap(view_id), __call_body(args, ["view_id", "id"]))
       },
     )
   }
@@ -929,6 +963,13 @@ fn __auth_scope_failure(status, code) {
       provider: NOTION_PROVIDER_ID,
       kind: "missing_auth",
       recovery: "Provide a Notion api_token or configure the notion/api-token secret.",
+    }
+  }
+  if normalized_code == "missing_oauth_client_credentials" {
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "missing_auth",
+      recovery: "Provide Notion OAuth client_id and client_secret credentials before calling OAuth token methods.",
     }
   }
   let scope_codes = ["unauthorized", "restricted_resource", "insufficient_permissions", "missing_scopes"]
@@ -1821,36 +1862,103 @@ fn __outbound_config(args) {
   )
 }
 
-fn __call_body(args) {
-  var body = args ?? {}
-  body.remove("api_base_url")
-  body.remove("api_token")
-  body.remove("token")
-  body.remove("api_token_secret")
-  body.remove("notion_version")
-  body.remove("secrets")
-  body.remove("id")
-  body.remove("page_id")
-  body.remove("database_id")
-  body.remove("data_source_id")
-  body.remove("block_id")
-  body.remove("comment_id")
-  body.remove("file_upload_id")
-  body.remove("property_id")
-  body.remove("query_id")
-  body.remove("user_id")
-  body.remove("view_id")
-  body.remove("start_cursor")
-  body.remove("page_size")
-  body.remove("filter_properties")
-  body.remove("include_transcript")
-  body.remove("name")
-  body.remove("status")
-  body.remove("request_method")
-  body.remove("http_method")
-  body.remove("method")
-  body.remove("path")
-  body.remove("body")
+fn __oauth_config(args) {
+  let api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
+    ?? env_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
+  let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
+    ?? env_or("NOTION_VERSION", NOTION_API_VERSION)
+  let client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
+    ?? __state()?.ctx?.client_id
+    ?? __state()?.ctx?.oauth?.client_id
+    ?? __state()?.ctx?.secrets?.client_id
+    ?? env("NOTION_CLIENT_ID")
+  let explicit_client_secret = args?.client_secret ?? args?.oauth?.client_secret
+    ?? args?.secrets?.client_secret
+    ?? __state()?.ctx?.client_secret
+    ?? __state()?.ctx?.oauth?.client_secret
+    ?? __state()?.ctx?.secrets?.client_secret
+  let client_secret = __configured_secret(explicit_client_secret, "client-secret")
+    ?? env("NOTION_CLIENT_SECRET")
+  if client_id == nil || trim(to_string(client_id)) == "" || client_secret == nil
+    || trim(to_string(client_secret)) == "" {
+    return Err(
+      {
+        code: "missing_oauth_client_credentials",
+        message: "notion OAuth token methods require client_id and client_secret",
+        auth_scope_failure: __auth_scope_failure(nil, "missing_oauth_client_credentials"),
+      },
+    )
+  }
+  return Ok(
+    {
+      api_base_url: to_string(api_base_url),
+      notion_version: to_string(notion_version),
+      client_id: to_string(client_id),
+      client_secret: to_string(client_secret),
+    },
+  )
+}
+
+fn __oauth_call(method, args) {
+  let config = __oauth_config(args ?? {})
+  if is_err(config) {
+    return config
+  }
+  let cfg = unwrap(config)
+  if method == "oauth.token.create" {
+    let body = __oauth_call_body(args)
+    let variant = if body?._variant != nil {
+      body
+    } else if body?.refresh_token != nil {
+      create_a_token_variant2(body.refresh_token)
+    } else if body?.code != nil {
+      create_a_token_variant1(body.code, body?.external_account, body?.redirect_uri)
+    } else {
+      return __err("invalid_args", "oauth.token.create requires code or refresh_token")
+    }
+    return __sdk_result(
+      try {
+        create_a_token(__oauth_client(cfg), variant)
+      },
+    )
+  }
+  if method == "oauth.token.introspect" {
+    return __sdk_result(
+      try {
+        introspect_token(__oauth_client(cfg), __oauth_call_body(args))
+      },
+    )
+  }
+  if method == "oauth.token.revoke" {
+    return __sdk_result(
+      try {
+        revoke_token(__oauth_client(cfg), __oauth_call_body(args))
+      },
+    )
+  }
+  return __err("method_not_found", "notion connector does not implement outbound method `" + method + "`")
+}
+
+fn __call_body(args, remove_fields = []) {
+  let extra = remove_fields ?? []
+  let skip = NOTION_CONTROL_ARG_FIELDS + extra
+  var body = {}
+  for entry in (args ?? {}).entries() {
+    if !contains(skip, to_string(entry.key)) {
+      body[entry.key] = entry.value
+    }
+  }
+  return body
+}
+
+fn __oauth_call_body(args) {
+  var body = {}
+  for entry in (args ?? {}).entries() {
+    let key = to_string(entry.key)
+    if key == "token" || !contains(NOTION_CONTROL_ARG_FIELDS, key) {
+      body[key] = entry.value
+    }
+  }
   return body
 }
 
@@ -1923,7 +2031,7 @@ fn __notion_request(method, url, body, cfg) {
       code: payload?.code ?? "notion_error",
       message: payload?.message
         ?? ("Notion API request failed with status " + to_string(http_response.status)),
-      request_id: response_headers.get("x-request-id") ?? response_headers.get("request-id"),
+      request_id: __response_request_id(response_headers),
     }
     let auth_scope_failure = __auth_scope_failure(http_response.status, err.code)
     if auth_scope_failure != nil {
@@ -1936,6 +2044,12 @@ fn __notion_request(method, url, body, cfg) {
 
 fn __sdk_client(cfg) {
   var client = new_client(__sdk_base_url(cfg.api_base_url), cfg.api_token)
+  client.extra_headers = {"Notion-Version": cfg.notion_version}
+  return client
+}
+
+fn __oauth_client(cfg) {
+  var client = new_client(__sdk_base_url(cfg.api_base_url), "", cfg.client_id, cfg.client_secret)
   client.extra_headers = {"Notion-Version": cfg.notion_version}
   return client
 }
@@ -1973,7 +2087,34 @@ fn __with_auth_scope_failure(result) {
   return Err(err)
 }
 
+fn __response_request_id(headers) {
+  return __header(headers ?? {}, "x-request-id") ?? __header(headers ?? {}, "request-id")
+    ?? __header(headers ?? {}, "x-notion-request-id")
+}
+
 fn __sdk_error(error) {
+  if type_of(error) == "dict" {
+    let decoded = try {
+      json_parse(error?.body ?? "{}")
+    }
+    let payload = if is_ok(decoded) {
+      unwrap(decoded)
+    } else {
+      {}
+    }
+    let status = error?.status ?? 0
+    var err = {
+      status: status,
+      code: payload?.code ?? "notion_error",
+      message: payload?.message ?? to_string(error),
+      request_id: __response_request_id(error?.headers ?? {}),
+    }
+    let auth_scope_failure = __auth_scope_failure(status, err.code)
+    if auth_scope_failure != nil {
+      err.auth_scope_failure = auth_scope_failure
+    }
+    return Err(err)
+  }
   let text = to_string(error)
   let marker = " HTTP "
   let marker_index = text.index_of(marker)

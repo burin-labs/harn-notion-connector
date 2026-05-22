@@ -36,8 +36,11 @@ pipeline default() {
   expect_eq(query.object, "list", "databases.query response")
   call("pages.create", {parent: {database_id: "db_123"}, properties: {Name: {title: []}}})
   call("blocks.children.append", {block_id: "page_123", children: []})
-  call("search.query", {query: "task"})
-  call("comments.create", {parent: {page_id: "page_123"}, rich_text: []})
+  call(
+    "search.query",
+    {query: "task", page_size: 25, start_cursor: "cursor_a", api_token: "secret_api"},
+  )
+  call("comments.create", {discussion_id: "discussion_123", markdown: "Follow up"})
   let calls = http_mock_calls()
   expect_eq(len(calls), 6, "all expected outbound methods dispatched")
   expect_eq(calls[0].method, "GET", "retrieve uses GET")
@@ -48,7 +51,27 @@ pipeline default() {
   expect_eq(calls[1].url, base + "/databases/db_123/query", "database query URL")
   let query_body = json_parse(calls[1].body)
   expect_eq(query_body.get("page_size"), 10, "query body page size")
+  expect_eq(query_body.get("database_id"), nil, "query path id is not leaked into body")
+  expect_eq(query_body.get("api_token"), nil, "query auth token is not leaked into body")
   expect_eq(calls[3].url, base + "/blocks/page_123/children", "append children URL")
+  let append_body = json_parse(calls[3].body)
+  expect_eq(append_body.get("block_id"), nil, "append path id is not leaked into body")
+  let search_body = json_parse(calls[4].body)
+  expect_eq(search_body.get("page_size"), 25, "search body keeps pagination page size")
+  expect_eq(search_body.get("start_cursor"), "cursor_a", "search body keeps pagination cursor")
+  expect_eq(search_body.get("api_token"), nil, "search auth token is not leaked into body")
+  let comment_body = json_parse(calls[5].body)
+  expect_eq(
+    comment_body.get("discussion_id"),
+    "discussion_123",
+    "discussion markdown comment uses discussion id",
+  )
+  expect_eq(comment_body.get("markdown"), "Follow up", "discussion markdown comment keeps markdown")
+  expect_eq(
+    comment_body.get("parent"),
+    nil,
+    "discussion markdown comment does not synthesize an empty parent",
+  )
   http_mock_clear()
   http_mock(
     "GET",
@@ -63,6 +86,7 @@ pipeline default() {
   expect(is_err(missing), "non-2xx response becomes Err")
   expect_eq(unwrap_err(missing).code, "object_not_found", "NotionError code")
   expect_eq(unwrap_err(missing).status, 404, "NotionError status")
+  expect_eq(unwrap_err(missing).request_id, "req_404", "NotionError request id")
   let unsupported = call("workspaces.retrieve", {workspace_id: "workspace_1"})
   expect(is_err(unsupported), "unsupported method rejected")
   expect_eq(unwrap_err(unsupported).code, "method_not_found", "unsupported method code")

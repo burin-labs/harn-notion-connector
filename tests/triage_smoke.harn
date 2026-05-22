@@ -123,6 +123,16 @@ pipeline default() {
     true,
     "api_call is conservatively approval-gated",
   )
+  expect_eq(
+    capabilities.get("oauth.token.introspect").requires_approval,
+    false,
+    "OAuth token introspection is read-only",
+  )
+  expect_eq(
+    capabilities.get("oauth.token.revoke").requires_approval,
+    true,
+    "OAuth token revocation requires approval",
+  )
   shutdown()
   init({api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"})
   http_mock_clear()

@@ -50,7 +50,7 @@ transient_provider_outage = "Retry after Notion API and webhook delivery endpoin
 # Publishable dependencies must be git-backed so this package resolves from a
 # clean consumer project without a sibling checkout.
 [dependencies]
-notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", rev = "ed555fa2ca4b23188c16b12b8a6655d4bef504eb" }
+notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", rev = "0856655838cd8f6628925497c3fd3b0b5abbda63" }
 
 [connector_contract]
 version = 1
