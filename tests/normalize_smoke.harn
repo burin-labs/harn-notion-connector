@@ -91,7 +91,7 @@ pipeline default() {
   shutdown()
   let missing_secret = normalize_inbound({body_text: event_body, headers: notion_headers(secret, event_body)})
   expect_eq(missing_secret.type, "reject", "missing secret rejects")
-  let source = read_file(source_dir() + "/../src/lib.harn")
+  let source = harness.fs.read_text(source_dir() + "/../src/lib.harn")
   expect(
     source.contains("constant_time_eq(expected, provided)"),
     "signature comparison uses constant_time_eq",
