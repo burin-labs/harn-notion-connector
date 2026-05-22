@@ -25,6 +25,8 @@ pipeline default() {
           body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
           headers: {},
         },
+        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_created\",\"type\":\"table\"}", headers: {}},
+        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"name\":\"Renamed\"}", headers: {}},
         {
           status: 200,
           body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
@@ -35,6 +37,13 @@ pipeline default() {
           body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"deleted\":true}",
           headers: {},
         },
+        {
+          status: 200,
+          body: "{\"access_token\":\"secret_access\",\"bot_id\":\"bot_123\",\"owner\":{},\"token_type\":\"bearer\",\"workspace_id\":\"ws_test\"}",
+          headers: {},
+        },
+        {status: 200, body: "{\"active\":true,\"request_id\":\"req_introspect\"}", headers: {}},
+        {status: 200, body: "{\"request_id\":\"req_revoke\"}", headers: {}},
       ],
     },
   )
@@ -48,24 +57,59 @@ pipeline default() {
   expect_eq(view.object, "view", "retrieve view object")
   let views = call("views.list", {data_source_id: "ds_123"})
   expect_eq(views.results[0].id, "view_123", "list views result")
+  let created_view = call("views.create", {data_source_id: "ds_123", name: "Task table", type: "table"})
+  expect_eq(created_view.id, "view_created", "create view result")
+  let updated_view = call("views.update", {view_id: "view_123", name: "Renamed"})
+  expect_eq(updated_view.name, "Renamed", "update view result")
   let results = call("views.queries.results", {view_id: "view_123", query_id: "query_123", page_size: 50})
   expect_eq(results.results[0].id, "page_123", "view query results")
   let deleted = call("views.queries.delete", {view_id: "view_123", query_id: "query_123"})
   expect_eq(deleted.deleted, true, "delete view query")
+  let token = call(
+    "oauth.token.create",
+    {client_id: "client_123", client_secret: "secret_client", code: "code_123"},
+  )
+  expect_eq(token.access_token, "secret_access", "OAuth token create response")
+  let introspected = call(
+    "oauth.token.introspect",
+    {client_id: "client_123", client_secret: "secret_client", token: "secret_access"},
+  )
+  expect_eq(introspected.active, true, "OAuth token introspect response")
+  let revoked = call(
+    "oauth.token.revoke",
+    {client_id: "client_123", client_secret: "secret_client", token: "secret_access"},
+  )
+  expect_eq(revoked.request_id, "req_revoke", "OAuth token revoke response")
   let calls = http_mock_calls()
   expect_eq(calls[0].url, base + "/data_sources/ds_123", "retrieve data source URL")
   expect_eq(calls[0].headers.get("notion-version"), "2026-03-11", "latest Notion version header")
   expect_eq(calls[1].url, base + "/views/view_123/queries", "create view query URL")
   let query_body = json_parse(calls[1].body)
   expect_eq(query_body.get("page_size"), 50, "create view query body")
+  expect_eq(query_body.get("view_id"), nil, "create view query path id is not leaked into body")
   expect_eq(calls[2].url, base + "/views/view_123", "retrieve view URL")
   expect(calls[3].url.contains("/views?"), "list views URL has query string")
+  let create_view_body = json_parse(calls[4].body)
+  expect_eq(create_view_body.get("name"), "Task table", "create view body keeps name")
+  expect_eq(create_view_body.get("data_source_id"), "ds_123", "create view body keeps data source")
+  let update_view_body = json_parse(calls[5].body)
+  expect_eq(update_view_body.get("name"), "Renamed", "update view body keeps name")
+  expect_eq(update_view_body.get("view_id"), nil, "update view path id is not leaked into body")
   expect_eq(
-    calls[4].url,
+    calls[6].url,
     base + "/views/view_123/queries/query_123?page_size=50",
     "view query results URL",
   )
-  expect_eq(calls[5].method, "DELETE", "delete view query method")
+  expect_eq(calls[7].method, "DELETE", "delete view query method")
+  expect_eq(calls[8].url, base + "/oauth/token", "OAuth token create URL")
+  let token_body = json_parse(calls[8].body)
+  expect_eq(token_body.get("code"), "code_123", "OAuth token create body keeps code")
+  expect_eq(token_body.get("client_secret"), nil, "OAuth client secret is not leaked into body")
+  expect_eq(calls[8].headers.get("authorization"), "[redacted]", "OAuth basic auth is redacted")
+  let introspect_body = json_parse(calls[9].body)
+  expect_eq(introspect_body.get("token"), "secret_access", "OAuth introspect body keeps target token")
+  let revoke_body = json_parse(calls[10].body)
+  expect_eq(revoke_body.get("token"), "secret_access", "OAuth revoke body keeps target token")
   http_mock_clear()
   shutdown()
 }
