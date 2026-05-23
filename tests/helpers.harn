@@ -5,20 +5,45 @@ pub fn notion_headers(secret, body) {
   return {"x-notion-signature": "sha256=" + hmac_sha256(secret, body)}
 }
 
+/**
+ * Rewrite a fixture body so its `timestamp` field falls inside the
+ * connector's F6 freshness window (300s). Re-emits canonical JSON via
+ * `json_stringify` so callers can sign over the refreshed bytes.
+ */
+pub fn refresh_body_timestamp(body) {
+  let parsed = try {
+    json_parse(body)
+  }
+  if is_err(parsed) {
+    return body
+  }
+  let payload = unwrap(parsed)
+  if type_of(payload) != "dict" {
+    return body
+  }
+  let now_iso = date_format(harness.clock.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
+  return json_stringify(payload + {timestamp: now_iso})
+}
+
 /** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
 pub fn signed_raw(secret, body, extra = nil) {
-  return {
-    verification_token: secret,
-    body_text: body,
-    headers: notion_headers(secret, body),
-    received_at: "2026-04-19T12:40:00Z",
-  }
+  let fresh = refresh_body_timestamp(body)
+  return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
     + extra ?? {}
 }
 
 /** Read a recorded webhook fixture body by basename. */
 pub fn fixture_body(name) {
   return harness.fs.read_text(source_dir() + "/fixtures/webhooks/" + name + ".json")
+}
+
+/**
+ * Read a fixture body and rewrite its `timestamp` to the current clock so
+ * the F6 freshness check accepts it. Use this in assertions that expect
+ * the unmodified-fixture event payload (other than the timestamp field).
+ */
+pub fn fixture_body_fresh(name) {
+  return refresh_body_timestamp(fixture_body(name))
 }
 
 /** Build a signed raw inbound webhook envelope from a recorded fixture. */

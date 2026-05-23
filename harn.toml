@@ -55,45 +55,50 @@ notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", rev =
 [connector_contract]
 version = 1
 
+# Security: after the 2026-05-23 F6 fix the Notion connector enforces a
+# 300-second freshness window on payload.timestamp against the trusted
+# clock so captured signed webhooks cannot be replayed indefinitely. The
+# static signed-fixture bodies below therefore now demonstrate the
+# replay-window rejection — happy-path normalize_inbound behaviour is
+# exercised by the tests/*.harn pipelines, which rewrite each fixture's
+# `timestamp` field to a fresh value at run time and sign over the
+# refreshed bytes so the connector accepts them within the window.
+
 [[connector_contract.fixtures]]
 provider = "notion"
-name = "page content updated webhook"
+name = "page content updated rejects stale signature"
 kind = "webhook"
 body = '''{"id":"evt_page_1","timestamp":"2026-04-19T12:34:56Z","type":"page.content_updated","workspace_id":"ws_test","subscription_id":"sub_test","integration_id":"int_test","actor":{"id":"user_ada","name":"Ada Lovelace"},"entity":{"id":"page_alpha","type":"page","parent":{"id":"database_tasks","type":"database"}}}'''
 headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=cdfabcb5e43424d5d9e8696f5200643aad42bb8e8716e3ca08dd3e2e2bf19abc", "request-id" = "req_page_1" }
 metadata = { verification_token = "contract-fixture-secret" }
-expect_type = "event"
-expect_kind = "page.content_updated"
-expect_signature_state = "verified"
-expect_payload_contains = { provider = "notion", event = "page.content_updated", workspace_id = "ws_test", request_id = "req_page_1", subscription_id = "sub_test", integration_id = "int_test", entity_id = "page_alpha", entity_type = "page", raw = { event_type = "page.content_updated", resource_id = "page_alpha", parent_id = "database_tasks" } }
-expect_event_count = 1
+expect_type = "reject"
+expect_response_status = 401
+expect_event_count = 0
 
 [[connector_contract.fixtures]]
 provider = "notion"
-name = "database created webhook"
+name = "database created rejects stale signature"
 kind = "webhook"
 body = '''{"id":"evt_database_1","timestamp":"2026-04-19T12:35:56Z","type":"database.created","workspace_id":"ws_test","subscription_id":"sub_test","actor":{"id":"user_grace","name":"Grace Hopper"},"entity":{"id":"database_projects","type":"database","parent":{"id":"page_home","type":"page"}}}'''
 headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=e845e38241ba965f88590fe259cad15c49875b8ba787e82136eed9dfafd934f8", "request-id" = "req_database_1" }
 metadata = { verification_token = "contract-fixture-secret" }
-expect_type = "event"
-expect_kind = "database.created"
-expect_signature_state = "verified"
-expect_payload_contains = { provider = "notion", event = "database.created", workspace_id = "ws_test", request_id = "req_database_1", subscription_id = "sub_test", entity_id = "database_projects", entity_type = "database", raw = { event_type = "database.created", resource_id = "database_projects", parent_id = "page_home" } }
-expect_event_count = 1
+expect_type = "reject"
+expect_response_status = 401
+expect_event_count = 0
 
 [[connector_contract.fixtures]]
 provider = "notion"
-name = "comment created webhook"
+name = "comment created rejects stale signature"
 kind = "webhook"
 body = '''{"id":"evt_comment_1","timestamp":"2026-04-19T12:36:56Z","type":"comment.created","workspace_id":"ws_test","subscription_id":"sub_test","actor":{"id":"user_katherine","name":"Katherine Johnson"},"entity":{"id":"comment_delta","type":"comment","parent":{"id":"page_alpha","type":"page"}}}'''
 headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=93cdf3345ecbe853d0530bfcf5d774256362d178f83c8cf7a1751767148d4390", "request-id" = "req_comment_1" }
 metadata = { verification_token = "contract-fixture-secret" }
-expect_type = "event"
-expect_kind = "comment.created"
-expect_signature_state = "verified"
-expect_payload_contains = { provider = "notion", event = "comment.created", workspace_id = "ws_test", request_id = "req_comment_1", subscription_id = "sub_test", entity_id = "comment_delta", entity_type = "comment", raw = { event_type = "comment.created", resource_id = "comment_delta", parent_id = "page_alpha" } }
-expect_event_count = 1
+expect_type = "reject"
+expect_response_status = 401
+expect_event_count = 0
 
+# F5: subscription.verification now emits under a dedicated kind so
+# downstream code must handle the unsigned path explicitly.
 [[connector_contract.fixtures]]
 provider = "notion"
 name = "subscription verification"
@@ -101,20 +106,18 @@ kind = "webhook"
 headers = { "content-type" = "application/json" }
 body = '''{"verification_token":"verify-token","type":"subscription.verification","id":"verification_1"}'''
 expect_type = "event"
-expect_kind = "subscription.verification"
+expect_kind = "notion.subscription.verification"
 expect_signature_state = "unsigned"
-expect_payload_contains = { provider = "notion", event = "subscription.verification", verification_token = "verify-token", entity_id = "verification_1", raw = { event_type = "subscription.verification", resource_id = "verification_1" } }
+expect_payload_contains = { provider = "notion", event = "notion.subscription.verification", verification_token = "verify-token", entity_id = "verification_1", raw = { event_type = "notion.subscription.verification", resource_id = "verification_1" } }
 expect_event_count = 1
 
 [[connector_contract.fixtures]]
 provider = "notion"
-name = "harn-cloud managed ingress page content updated webhook"
+name = "harn-cloud managed ingress rejects stale signature"
 kind = "webhook"
 body = '''{"id":"evt_page_1","timestamp":"2026-04-19T12:34:56Z","type":"page.content_updated","workspace_id":"ws_test","subscription_id":"sub_test","integration_id":"int_test","actor":{"id":"user_ada","name":"Ada Lovelace"},"entity":{"id":"page_alpha","type":"page","parent":{"id":"database_tasks","type":"database"}}}'''
 headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=cdfabcb5e43424d5d9e8696f5200643aad42bb8e8716e3ca08dd3e2e2bf19abc", "request-id" = "req_cloud_page_1" }
 metadata = { tenant_slug = "acme", trigger_id = "notion", binding_id = "notion", provider = "notion", package = { name = "harn-notion-connector", version = "v0.1.0" }, signature_status = "verified", secret_ids = { verification_token = "notion.webhook.secret", signing_secret = "notion.webhook.secret" }, sandbox = { tenant_id = "tenant-acme", egress_allowlist = ["api.notion.com"] } }
-expect_type = "event"
-expect_kind = "page.content_updated"
-expect_signature_state = "verified"
-expect_payload_contains = { provider = "notion", event = "page.content_updated", workspace_id = "ws_test", request_id = "req_cloud_page_1", subscription_id = "sub_test", integration_id = "int_test", entity_id = "page_alpha", entity_type = "page", raw = { event_type = "page.content_updated", resource_id = "page_alpha", triage = { source = { provider = "notion", kind = "page", id = "page_alpha" }, raw_ref = { field = "payload.raw" } } } }
-expect_event_count = 1
+expect_type = "reject"
+expect_response_status = 401
+expect_event_count = 0

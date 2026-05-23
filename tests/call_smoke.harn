@@ -4,10 +4,10 @@ import { expect, expect_eq } from "./assertions"
 pipeline default() {
   shutdown()
   init(
-    {api_token: "secret_api", api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"},
+    {api_token: "secret_api", api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"},
   )
   http_mock_clear()
-  let base = "https://notion.test/v1"
+  let base = "https://api.notion.com/v1"
   http_mock(
     "*",
     base + "/*",
@@ -101,6 +101,17 @@ pipeline default() {
     "missing_auth",
     "missing api token recovery",
   )
+  // F8: outbound calls to non-allowlisted hosts are rejected so the
+  // workspace API token cannot reach attacker-controlled origins.
+  let bad_host = call(
+    "pages.retrieve",
+    {page_id: "page_123", api_token: "secret_api", api_base_url: "https://evil.example/v1"},
+  )
+  expect(is_err(bad_host), "F8: disallowed api_base_url rejected")
+  expect_eq(unwrap_err(bad_host).code, "disallowed_api_base_url", "F8: disallowed host code")
+  let bad_url = call("pages.retrieve", {page_id: "page_123", api_token: "secret_api", api_base_url: "not-a-url"})
+  expect(is_err(bad_url), "F8: malformed api_base_url rejected")
+  expect_eq(unwrap_err(bad_url).code, "invalid_api_base_url", "F8: malformed url code")
   http_mock_clear()
   shutdown()
 }

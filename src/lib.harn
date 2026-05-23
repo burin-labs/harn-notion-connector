@@ -62,6 +62,14 @@ let NOTION_API_BASE_URL = "https://api.notion.com/v1"
 
 let NOTION_API_VERSION = "2026-03-11"
 
+/**
+ * F8: hosts permitted for outbound Notion API calls. Caller-supplied
+ * `api_base_url` overrides are validated against this allowlist before
+ * any HTTP request so the workspace API token cannot be shipped to
+ * attacker-controlled hosts.
+ */
+let NOTION_ALLOWED_API_HOSTS = ["api.notion.com"]
+
 let NOTION_OUTBOUND_METHODS = [
   "blocks.retrieve",
   "blocks.update",
@@ -333,15 +341,97 @@ pub fn normalize_inbound(raw) {
   if payload?.type == "subscription.verification"
     && payload?.verification_token != nil
     && trim(to_string(payload.verification_token)) != "" {
-    let event = __build_event("subscription.verification", payload, raw, "unsigned")
+    // F5: the unsigned subscription-verification handshake bypasses HMAC by
+    // design. Cap the verification_token length so a hostile caller cannot
+    // pipe an unbounded blob through the connector, and emit under a
+    // dedicated kind so downstream code must handle the unsigned path
+    // explicitly rather than treating it as a generic event.
+    let raw_token = trim(to_string(payload.verification_token))
+    if len(raw_token) > NOTION_VERIFICATION_TOKEN_MAX_LEN {
+      return __reject(
+        400,
+        "verification_token_too_long",
+        "notion verification_token exceeds " + to_string(NOTION_VERIFICATION_TOKEN_MAX_LEN)
+          + " chars",
+      )
+    }
+    let event = __build_event("notion.subscription.verification", payload, raw, "unsigned")
     return {type: "event", event: event}
   }
   let verified = __verify_notion_signature(raw, raw?.headers ?? {}, unwrap(body_text))
   if is_err(verified) {
     return __reject_err(unwrap_err(verified))
   }
+  // F6: enforce a freshness window against the trusted clock so a captured
+  // signed webhook cannot be replayed indefinitely. Notion supplies an ISO
+  // timestamp in payload.timestamp.
+  let freshness = __notion_freshness_check(payload)
+  if is_err(freshness) {
+    return __reject_err(unwrap_err(freshness))
+  }
   let event = __build_event(payload?.type ?? "notion.webhook", payload, raw, "verified")
   return {type: "event", event: event}
+}
+
+/**
+ * F5: cap on inbound verification_token length for the unsigned
+ * subscription.verification handshake. Notion's real tokens are < 100
+ * chars, so 512 is generous.
+ */
+let NOTION_VERIFICATION_TOKEN_MAX_LEN = 512
+
+/**
+ * F6: cap on the age of a signed Notion webhook before we reject it as a
+ * potential replay. Mirrors Slack's 300-second policy.
+ */
+let NOTION_REPLAY_WINDOW_SECONDS = 300
+
+fn __notion_freshness_check(payload) {
+  let raw_ts = payload?.timestamp
+  if raw_ts == nil {
+    return Ok(true)
+  }
+  let now = timestamp()
+  var event_seconds = nil
+  let kind = type_of(raw_ts)
+  if kind == "int" || kind == "float" {
+    event_seconds = raw_ts
+  } else {
+    let text = trim(to_string(raw_ts))
+    if text == "" {
+      return Ok(true)
+    }
+    let parsed = try {
+      date_parse(text)
+    }
+    if !is_err(parsed) && unwrap(parsed) != nil {
+      event_seconds = unwrap(parsed)
+    } else {
+      let numeric = try {
+        to_float(text)
+      }
+      if !is_err(numeric) && unwrap(numeric) != nil {
+        event_seconds = unwrap(numeric)
+      }
+    }
+  }
+  if event_seconds == nil {
+    return Ok(true)
+  }
+  let delta = if now >= event_seconds {
+    now - event_seconds
+  } else {
+    event_seconds - now
+  }
+  if delta > NOTION_REPLAY_WINDOW_SECONDS {
+    return __err(
+      "timestamp_out_of_window",
+      "notion webhook payload.timestamp is outside the "
+        + to_string(NOTION_REPLAY_WINDOW_SECONDS)
+        + "-second replay window",
+    )
+  }
+  return Ok(true)
 }
 
 @complexity(allow)
@@ -997,7 +1087,8 @@ fn __reject(status, code, message) {
 fn __reject_err(err) {
   let code = err?.code ?? "rejected"
   let message = err?.message ?? "request rejected"
-  let status = if code == "missing_signature" || code == "invalid_signature" || code == "missing_secret" {
+  let status = if code == "missing_signature" || code == "invalid_signature" || code == "missing_secret"
+    || code == "timestamp_out_of_window" {
     401
   } else {
     400
@@ -1120,12 +1211,31 @@ fn __signing_secret(raw) {
   return nil
 }
 
+/**
+ * F9: only allow caller-supplied secret references that live under the
+ * `notion/` namespace. Otherwise a tenant binding could plant
+ * `othertenant/api-token` (or `othertenant.api-token`) and cross-read
+ * secrets if the secret backend doesn't enforce isolation.
+ */
+fn __is_allowed_notion_secret_id(value) {
+  let raw = trim(to_string(value ?? ""))
+  if raw == "" {
+    return false
+  }
+  return raw.starts_with(NOTION_PROVIDER_ID + "/")
+}
+
 fn __configured_secret(value, fallback_name) {
   if value == nil || trim(to_string(value)) == "" {
     return nil
   }
   let text = trim(to_string(value))
   if contains(text, "/") || contains(text, ".") {
+    // F9: refuse to dereference caller-supplied IDs outside the notion/
+    // namespace. Treat the value as a literal secret instead.
+    if !__is_allowed_notion_secret_id(text) {
+      return text
+    }
     let resolved = __secret_get_candidates(
       [
         __secret_id_candidate(text, fallback_name),
@@ -1163,6 +1273,12 @@ fn __secret_id_candidate(value, fallback_name) {
   }
   let text = trim(to_string(value))
   if contains(text, "/") || contains(text, ".") {
+    // F9: refuse to resolve caller-supplied secret IDs outside the notion/
+    // namespace. The caller can still pass a literal value through other
+    // paths; this only blocks the secret_get(...) indirection.
+    if !__is_allowed_notion_secret_id(text) {
+      return nil
+    }
     return text
   }
   if fallback_name != nil && trim(to_string(fallback_name)) != "" {
@@ -1250,6 +1366,12 @@ fn __normalize_event(event_type, payload, raw) {
 
 fn __build_event(event_type, payload, raw, signature_status) {
   var normalized_payload = __normalize_event(event_type, payload, raw)
+  // F5: only surface verification_token on the dedicated unsigned-verification
+  // event kind. Strip it from generic signed events so attacker-supplied
+  // strings (entity_id and friends) cannot piggyback through the payload.
+  if to_string(event_type) != "notion.subscription.verification" {
+    normalized_payload.verification_token = nil
+  }
   let occurred_at = normalized_payload.occurred_at
   let resource_id = normalized_payload.resource_id
   let headers = __event_headers(raw?.headers ?? {})
@@ -1824,9 +1946,76 @@ fn __triage_action_intents(source_kind, source_id) {
   ]
 }
 
+fn __extract_host(url) {
+  let trimmed = trim(to_string(url ?? ""))
+  if trimmed == "" {
+    return nil
+  }
+  let lower = lowercase(trimmed)
+  var rest = nil
+  if lower.starts_with("https://") {
+    rest = trimmed[8:len(trimmed)]
+  } else if lower.starts_with("http://") {
+    rest = trimmed[7:len(trimmed)]
+  } else {
+    return nil
+  }
+  let at_idx = rest.index_of("@")
+  if at_idx != nil && at_idx >= 0 {
+    rest = rest[at_idx + 1:len(rest)]
+  }
+  var end = len(rest)
+  for ch in ["/", "?", "#"] {
+    let idx = rest.index_of(ch)
+    if idx != nil && idx >= 0 && idx < end {
+      end = idx
+    }
+  }
+  var host = rest[0:end]
+  let colon_idx = host.index_of(":")
+  if colon_idx != nil && colon_idx >= 0 {
+    host = host[0:colon_idx]
+  }
+  return lowercase(host)
+}
+
+/**
+ * F8: validate caller- or env-supplied `api_base_url` against the
+ * NOTION_ALLOWED_API_HOSTS allowlist. Returns Ok(url) when accepted; Err
+ * otherwise so the caller never ships a Notion API token to an
+ * attacker-controlled host.
+ */
+fn __validate_api_base_url(api_base_url) {
+  if api_base_url == nil {
+    return Ok(NOTION_API_BASE_URL)
+  }
+  let text = trim(to_string(api_base_url))
+  if text == "" || text == NOTION_API_BASE_URL {
+    return Ok(NOTION_API_BASE_URL)
+  }
+  let host = __extract_host(text)
+  if host == nil {
+    return Err({code: "invalid_api_base_url", message: "notion api_base_url must be an absolute http(s) URL"})
+  }
+  if !contains(NOTION_ALLOWED_API_HOSTS, host) {
+    return Err(
+      {
+        code: "disallowed_api_base_url",
+        message: "notion api_base_url host `" + host + "` is not in the allowlist",
+      },
+    )
+  }
+  return Ok(text)
+}
+
 fn __outbound_config(args) {
-  let api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
+  let raw_api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
+  let api_base_check = __validate_api_base_url(raw_api_base_url)
+  if is_err(api_base_check) {
+    return api_base_check
+  }
+  let api_base_url = unwrap(api_base_check)
   let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
     ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   let explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
@@ -1863,8 +2052,13 @@ fn __outbound_config(args) {
 }
 
 fn __oauth_config(args) {
-  let api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
+  let raw_api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
+  let api_base_check = __validate_api_base_url(raw_api_base_url)
+  if is_err(api_base_check) {
+    return api_base_check
+  }
+  let api_base_url = unwrap(api_base_check)
   let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
     ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   let client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
