@@ -1,6 +1,12 @@
 import { normalize_inbound, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
-import { assert_notion_interface, fixture_body, fixture_raw, notion_headers } from "./helpers"
+import {
+  assert_notion_interface,
+  fixture_body,
+  fixture_body_fresh,
+  fixture_raw,
+  notion_headers,
+} from "./helpers"
 
 pipeline default() {
   let secret = "test-verification-token"
@@ -20,14 +26,17 @@ pipeline default() {
   expect_eq(page.event.payload.resource_id, "page_alpha", "page resource id")
   expect_eq(page.event.payload.parent_id, "database_tasks", "page parent id")
   expect_eq(page.event.payload.actor.id, "user_ada", "page actor id")
-  expect_eq(page.event.payload.occurred_at, "2026-04-19T12:34:56Z", "page occurred_at")
+  // F6: timestamp is now refreshed at fixture-load to stay inside the
+  // 300s replay window; assert the field is populated rather than pinning
+  // the exact value.
+  expect(page.event.payload.occurred_at != nil, "page occurred_at populated")
   expect(page.event.dedupe_key != "" && page.event.dedupe_key != nil, "page dedupe key populated")
+  let fresh_body = fixture_body_fresh("page_content_updated")
   let raw_body = normalize_inbound(
     {
       verification_token: secret,
-      raw_body: bytes_from_string(fixture_body("page_content_updated")),
-      headers: notion_headers(secret, fixture_body("page_content_updated")),
-      received_at: "2026-04-19T12:40:00Z",
+      raw_body: bytes_from_string(fresh_body),
+      headers: notion_headers(secret, fresh_body),
     },
   )
   expect_eq(raw_body.type, "event", "raw_body envelope type")
@@ -96,5 +105,65 @@ pipeline default() {
     source.contains("constant_time_eq(expected, provided)"),
     "signature comparison uses constant_time_eq",
   )
+  // F5: subscription.verification handshake now emits under a dedicated
+  // kind so downstream code can opt into the unsigned path explicitly;
+  // generic signed events must NOT carry verification_token through.
+  let verification_body = json_stringify(
+    {verification_token: "verify-token", type: "subscription.verification", id: "verification_1"},
+  )
+  let verification = normalize_inbound({body_text: verification_body, headers: {}})
+  expect_eq(verification.type, "event", "F5: verification emits an event")
+  expect_eq(
+    verification.event.kind,
+    "notion.subscription.verification",
+    "F5: verification uses dedicated kind",
+  )
+  expect_eq(verification.event.signature_status.state, "unsigned", "F5: verification is unsigned")
+  expect_eq(
+    verification.event.payload.verification_token,
+    "verify-token",
+    "F5: verification_token surfaces on the dedicated kind",
+  )
+  // F5: cap on verification_token length.
+  var oversized = ""
+  var i = 0
+  while i < 600 {
+    oversized = oversized + "a"
+    i = i + 1
+  }
+  let oversized_body = json_stringify(
+    {verification_token: oversized, type: "subscription.verification", id: "verification_long"},
+  )
+  let oversized_result = normalize_inbound({body_text: oversized_body, headers: {}})
+  expect_eq(oversized_result.type, "reject", "F5: oversized verification_token rejects")
+  // F5: generic signed events must NOT carry verification_token through.
+  let fresh = fixture_body_fresh("page_content_updated")
+  let signed_with_token_body = json_stringify(json_parse(fresh) + {verification_token: "should-not-surface"})
+  let signed_with_token = normalize_inbound(
+    {
+      verification_token: secret,
+      body_text: signed_with_token_body,
+      headers: notion_headers(secret, signed_with_token_body),
+    },
+  )
+  expect_eq(signed_with_token.type, "event", "F5: signed event still accepted")
+  expect_eq(
+    signed_with_token.event.payload.verification_token,
+    nil,
+    "F5: verification_token stripped from generic signed payloads",
+  )
+  // F6: stale signed-body timestamps fall outside the 300s replay window.
+  let stale_body = json_stringify(
+    {
+      id: "evt_stale",
+      timestamp: "2024-01-01T00:00:00Z",
+      type: "page.content_updated",
+      entity: {id: "page_stale", type: "page"},
+    },
+  )
+  let stale = normalize_inbound(
+    {verification_token: secret, body_text: stale_body, headers: notion_headers(secret, stale_body)},
+  )
+  expect_eq(stale.type, "reject", "F6: stale payload.timestamp rejects")
   shutdown()
 }

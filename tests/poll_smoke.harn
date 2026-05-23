@@ -45,9 +45,9 @@ fn list_body(results, has_more = false, next_cursor = nil) {
 
 pipeline default() {
   shutdown()
-  init({api_base_url: "https://notion.test/v1", notion_version: "2026-03-11"})
+  init({api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"})
   http_mock_clear()
-  let base = "https://notion.test/v1"
+  let base = "https://api.notion.com/v1"
   http_mock(
     "POST",
     base + "/data_sources/ds_123/query",
