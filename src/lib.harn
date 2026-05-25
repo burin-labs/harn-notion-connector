@@ -391,7 +391,7 @@ fn __notion_freshness_check(payload) {
   if raw_ts == nil {
     return Ok(true)
   }
-  let now = timestamp()
+  let now = date_now().timestamp
   var event_seconds = nil
   let kind = type_of(raw_ts)
   if kind == "int" || kind == "float" {

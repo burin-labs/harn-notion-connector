@@ -47,6 +47,7 @@ fn task_page() {
 }
 
 pipeline default() {
+  egress_policy({allow: ["api.notion.com"], default: "deny"})
   let secret = "test-verification-token"
   let webhook = normalize_inbound(fixture_raw("page_task_updated", secret))
   expect_eq(webhook.type, "event", "webhook triage fixture emits event")
