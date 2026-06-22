@@ -277,7 +277,7 @@ pub fn activate(bindings = []) {
   var poll_bindings = {}
   var seen_paths = {}
   for binding in bindings ?? [] {
-    let binding_id = binding?.binding_id ?? binding?.id ?? "binding-"
+    let binding_id = (binding?.binding_id ?? binding?.id ?? "binding-")
       + to_string(len(webhook_bindings.keys()) + len(poll_bindings.keys()))
     let kind = binding?.kind ?? binding?.source?.kind ?? binding?.config?.kind ?? "webhook"
     let normalized = binding + {binding_id: binding_id, kind: kind}

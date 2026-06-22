@@ -29,7 +29,7 @@ pub fn refresh_body_timestamp(body) {
 pub fn signed_raw(secret, body, extra = nil) {
   let fresh = refresh_body_timestamp(body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
-    + extra ?? {}
+    + (extra ?? {})
 }
 
 /** Read a recorded webhook fixture body by basename. */
