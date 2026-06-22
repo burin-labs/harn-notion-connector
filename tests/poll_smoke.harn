@@ -26,7 +26,7 @@ fn poll_ctx(cursor = nil, state = nil, extra = nil) {
       },
     },
   }
-    + extra ?? {}
+    + (extra ?? {})
 }
 
 fn page(id, edited_at, parent_id = "ds_123") {
