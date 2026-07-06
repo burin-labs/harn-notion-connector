@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added deterministic artifact helper descriptors:
+  `artifact.export_request` supports Notion page metadata, block-tree, markdown,
+  and existing file-URL export descriptors, while `artifact.import_request`
+  supports page creation, block append, and File Upload API import descriptors.
+  Page-to-PDF export now returns an explicit `unsupported_pdf_export` error
+  because Notion's public API has no official page-to-PDF export endpoint.
+- Bumped the package metadata to `0.1.1` for the artifact-helper and current
+  Harn `>=0.9,<0.10` compatibility release.
 - Pinned `notion-sdk-harn` to its tagged `v0.1.0` release
   (commit `bad580c5fbe8ede612b2748ad98606642ce2fc02`) instead of a bare
   branch-tip SHA. Fresh installs are now reproducible without depending on

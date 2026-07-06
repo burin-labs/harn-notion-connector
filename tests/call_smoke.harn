@@ -1,4 +1,4 @@
-import { call, init, shutdown } from "../src/lib"
+import { artifact_export_request, artifact_import_request, call, init, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 
 pipeline default() {
@@ -94,6 +94,64 @@ pipeline default() {
   let unapproved_api_call = call("api_call", {request_method: "POST", path: "/pages", body: {parent: {page_id: "page_123"}}})
   expect(is_err(unapproved_api_call), "write-like api_call requires approval")
   expect_eq(unwrap_err(unapproved_api_call).code, "approval_required", "api_call approval code")
+  let page_export = artifact_export_request({page_id: "page_123", format: "page", name: "report.json"})
+  expect_eq(page_export.kind, "artifact_export", "page export descriptor kind")
+  expect_eq(page_export.method, "GET", "page export method")
+  expect_eq(page_export.url, base + "/pages/page_123", "page export URL")
+  expect_eq(page_export.artifact.mime_type, "application/json", "page export mime")
+  let block_export = call("artifact.export_request", {page_id: "page_123", format: "blocks", page_size: 25})
+  expect_eq(block_export.url, base + "/blocks/page_123/children", "block export URL")
+  expect_eq(block_export.query.page_size, 25, "block export page size")
+  let file_export = artifact_export_request(
+    {file_url: "https://secure.notion-static.com/report.pdf", name: "report.pdf"},
+  )
+  expect_eq(file_export.url, "https://secure.notion-static.com/report.pdf", "file URL export")
+  expect_eq(file_export.artifact.mime_type, "application/pdf", "file MIME inferred")
+  let pdf_export = artifact_export_request({page_id: "page_123", format: "pdf"})
+  expect(is_err(pdf_export), "Notion page PDF export is unsupported")
+  expect_eq(unwrap_err(pdf_export).code, "unsupported_pdf_export", "Notion PDF export code")
+  let create_import = artifact_import_request(
+    {
+      mode: "create_page",
+      parent: {page_id: "parent_123"},
+      title: "Generated report",
+      children: [{object: "block", type: "paragraph", paragraph: {rich_text: []}}],
+      uri: "artifact://session/report.json",
+    },
+  )
+  expect_eq(create_import.kind, "artifact_import", "create import kind")
+  expect_eq(create_import.method, "POST", "create import method")
+  expect_eq(create_import.url, base + "/pages", "create import URL")
+  expect_eq(
+    create_import.body.properties.title.title[0].text.content,
+    "Generated report",
+    "default title",
+  )
+  expect_eq(create_import.media.uri, "artifact://session/report.json", "create import media URI")
+  let append_import = call(
+    "artifact.import_request",
+    {
+      mode: "append_blocks",
+      page_id: "page_123",
+      blocks: [{object: "block", type: "divider", divider: {}}],
+    },
+  )
+  expect_eq(append_import.method, "PATCH", "append import method")
+  expect_eq(append_import.url, base + "/blocks/page_123/children", "append import URL")
+  expect_eq(len(append_import.body.children), 1, "append import children")
+  let file_import = artifact_import_request(
+    {
+      mode: "external_file",
+      filename: "report.pdf",
+      external_url: "https://example.com/report.pdf",
+      attach_to_page_id: "page_123",
+    },
+  )
+  expect_eq(file_import.url, base + "/file_uploads", "file import create URL")
+  expect_eq(file_import.body.mode, "external_url", "external file import mode")
+  expect_eq(file_import.body.content_type, "application/pdf", "external file content type")
+  expect_eq(len(file_import.steps), 2, "external file import attach steps")
+  expect_eq(file_import.steps[1].id, "append_file_block", "external file attach step")
   let missing_auth = call("pages.retrieve", {page_id: "page_123", api_token: ""})
   expect(is_err(missing_auth), "empty api token rejects before dispatch")
   expect_eq(unwrap_err(missing_auth).code, "missing_api_token", "missing api token code")

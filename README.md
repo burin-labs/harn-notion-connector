@@ -5,7 +5,7 @@ Notion event payloads to the canonical `TriggerEvent` shape, and dispatches
 outbound API calls through
 [notion-sdk-harn](https://github.com/burin-labs/notion-sdk-harn).
 
-Status: v0.1.0. This package is verified with the `harn-cli` version pinned in
+Status: v0.1.1. This package is verified with the `harn-cli` version pinned in
 `.harn-version`.
 
 This is an **inbound + outbound** connector implementing the Harn Connector
@@ -29,7 +29,7 @@ harn --version
 Add the released connector package:
 
 ```sh
-harn add github.com/burin-labs/harn-notion-connector@v0.1.0
+harn add github.com/burin-labs/harn-notion-connector@v0.1.1
 ```
 
 For local development, depend on this checkout via a path import:
@@ -105,6 +105,11 @@ Outbound calls:
 - OAuth token helpers: `oauth.token.create`, `oauth.token.introspect`, and
   `oauth.token.revoke` use Notion OAuth client credentials and keep the target
   token in the request body only for introspection/revocation.
+- Artifact helpers: `artifact.export_request` and `artifact.import_request`
+  build deterministic descriptors for page metadata export, block-tree export,
+  Notion file URL download, page creation, block append, and File Upload API
+  import flows. Page-to-PDF export returns `unsupported_pdf_export` because
+  Notion's public API does not provide an official page-to-PDF export endpoint.
 - `api_call` is an escape hatch for Notion endpoints not yet wrapped by
   `notion-sdk-harn`. Non-GET `api_call` requests require `approved = true`.
 
