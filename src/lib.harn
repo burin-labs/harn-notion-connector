@@ -119,6 +119,8 @@ let NOTION_OUTBOUND_METHODS = [
   "oauth.token.create",
   "oauth.token.introspect",
   "oauth.token.revoke",
+  "artifact.export_request",
+  "artifact.import_request",
   "api_call",
 ]
 
@@ -147,6 +149,7 @@ let NOTION_WRITE_METHODS = [
   "views.queries.delete",
   "oauth.token.create",
   "oauth.token.revoke",
+  "artifact.import_request",
   "api_call",
 ]
 
@@ -439,6 +442,12 @@ fn __notion_freshness_check(payload) {
 pub fn call(method, args = {}) {
   if !contains(NOTION_OUTBOUND_METHODS, method) {
     return __err("method_not_found", "notion connector does not implement outbound method `" + method + "`")
+  }
+  if method == "artifact.export_request" {
+    return artifact_export_request(args ?? {})
+  }
+  if method == "artifact.import_request" {
+    return artifact_import_request(args ?? {})
   }
   if to_string(method).starts_with("oauth.") {
     return __oauth_call(method, args ?? {})
@@ -965,6 +974,223 @@ pub fn call(method, args = {}) {
   return __err("method_not_found", "notion connector does not implement outbound method `" + method + "`")
 }
 
+/** Build a deterministic Notion export descriptor for a page, block tree, or file URL. */
+pub fn artifact_export_request(args = {}) {
+  let cfg = __outbound_config(args ?? {})
+  if is_err(cfg) {
+    return cfg
+  }
+  let notion_cfg = unwrap(cfg)
+  let format = lowercase(to_string(args?.format ?? "blocks"))
+  if format == "pdf" {
+    return __err(
+      "unsupported_pdf_export",
+      "Notion's public API does not provide an official page-to-PDF export endpoint",
+    )
+  }
+  let direct_file_url = args?.file_url ?? args?.url ?? args?.notion_file?.url ?? args?.file?.url
+  if direct_file_url != nil && trim(to_string(direct_file_url)) != "" {
+    let name = to_string(args?.name ?? args?.filename ?? "notion-file")
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_export",
+      method: "GET",
+      url: to_string(direct_file_url),
+      artifact: {
+        uri: args?.uri ?? ("notion://files/" + url_encode(name)),
+        name: name,
+        mime_type: to_string(args?.mime_type ?? args?.content_type ?? __mime_type_from_name(name)),
+        source_ref: __notion_ref("file", args?.file_upload_id ?? args?.file_id ?? name),
+      },
+      scopes: ["Read content"],
+    }
+  }
+  let page_id = __required_id(args, "page_id", "artifact.export_request")
+  if is_err(page_id) {
+    return page_id
+  }
+  let page = unwrap(page_id)
+  if format == "page" || format == "metadata" {
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_export",
+      method: "GET",
+      url: __notion_api_url(notion_cfg.api_base_url, "/pages/" + url_encode(to_string(page))),
+      artifact: {
+        uri: "notion://pages/" + to_string(page),
+        name: to_string(args?.name ?? ("notion-page-" + to_string(page) + ".json")),
+        mime_type: "application/json",
+        source_ref: __notion_ref("page", page),
+      },
+      scopes: ["Read content"],
+    }
+  }
+  if format == "blocks" || format == "json" {
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_export",
+      method: "GET",
+      url: __notion_api_url(notion_cfg.api_base_url, "/blocks/" + url_encode(to_string(page)) + "/children"),
+      query: {page_size: args?.page_size ?? 100, start_cursor: args?.start_cursor},
+      artifact: {
+        uri: "notion://pages/" + to_string(page) + "/blocks",
+        name: to_string(args?.name ?? ("notion-page-" + to_string(page) + "-blocks.json")),
+        mime_type: "application/json",
+        source_ref: __notion_ref("page", page),
+      },
+      scopes: ["Read content"],
+    }
+  }
+  if format == "markdown" {
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_export",
+      method: "GET",
+      url: __notion_api_url(notion_cfg.api_base_url, "/pages/" + url_encode(to_string(page)) + "/markdown"),
+      artifact: {
+        uri: "notion://pages/" + to_string(page) + "/markdown",
+        name: to_string(args?.name ?? ("notion-page-" + to_string(page) + ".md")),
+        mime_type: "text/markdown",
+        source_ref: __notion_ref("page", page),
+      },
+      scopes: ["Read content"],
+    }
+  }
+  return __err(
+    "unsupported_artifact_format",
+    "notion artifact export format `" + format + "` is not supported",
+  )
+}
+
+/** Build deterministic Notion import descriptors for generated page/block/file artifacts. */
+pub fn artifact_import_request(args = {}) {
+  let cfg = __outbound_config(args ?? {})
+  if is_err(cfg) {
+    return cfg
+  }
+  let notion_cfg = unwrap(cfg)
+  let mode = lowercase(to_string(args?.mode ?? args?.import_mode ?? "append_blocks"))
+  if mode == "create_page" || mode == "page" {
+    let parent = args?.parent
+    if parent == nil {
+      return __err("invalid_args", "notion create_page artifact import requires parent")
+    }
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_import",
+      method: "POST",
+      url: __notion_api_url(notion_cfg.api_base_url, "/pages"),
+      body: {
+        parent: parent,
+        properties: args?.properties ?? __title_properties(args?.title ?? args?.name ?? "Imported artifact"),
+        children: args?.children ?? args?.blocks ?? [],
+        icon: args?.icon,
+        cover: args?.cover,
+      },
+      media: __artifact_media(args ?? {}, "application/json"),
+      scopes: ["Insert content"],
+    }
+  }
+  if mode == "append_blocks" || mode == "blocks" {
+    let block_id = args?.block_id ?? args?.page_id
+    if block_id == nil || trim(to_string(block_id)) == "" {
+      return __err("invalid_args", "notion append_blocks artifact import requires block_id or page_id")
+    }
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_import",
+      method: "PATCH",
+      url: __notion_api_url(
+        notion_cfg.api_base_url,
+        "/blocks/" + url_encode(to_string(block_id)) + "/children",
+      ),
+      body: {children: args?.children ?? args?.blocks ?? []},
+      media: __artifact_media(args ?? {}, "application/json"),
+      scopes: ["Insert content"],
+    }
+  }
+  if mode == "external_file" || mode == "file_upload" {
+    let filename = args?.filename ?? args?.name
+    if filename == nil || trim(to_string(filename)) == "" {
+      return __err("invalid_args", "notion file artifact import requires filename or name")
+    }
+    let external_url = args?.external_url ?? args?.url
+    let upload_mode = if external_url == nil {
+      to_string(args?.upload_mode ?? "single_part")
+    } else {
+      "external_url"
+    }
+    var create_body = {
+      mode: upload_mode,
+      filename: to_string(filename),
+      content_type: args?.content_type ?? args?.mime_type ?? __mime_type_from_name(filename),
+    }
+    if external_url != nil {
+      create_body.external_url = external_url
+    }
+    var steps = [
+      {
+        id: "create_file_upload",
+        method: "POST",
+        url: __notion_api_url(notion_cfg.api_base_url, "/file_uploads"),
+        body: create_body,
+      },
+    ]
+    if external_url == nil {
+      steps = steps
+        + [
+        {
+          id: "send_file_upload",
+          method: "POST",
+          url_template: __notion_api_url(notion_cfg.api_base_url, "/file_uploads/{file_upload_id}/send"),
+          multipart: {file_field: "file", uri: args?.uri ?? args?.path, part_number: args?.part_number},
+        },
+      ]
+    }
+    if args?.complete ?? false {
+      steps = steps
+        + [
+        {
+          id: "complete_file_upload",
+          method: "POST",
+          url_template: __notion_api_url(notion_cfg.api_base_url, "/file_uploads/{file_upload_id}/complete"),
+          body: {},
+        },
+      ]
+    }
+    if args?.attach_to_block_id != nil || args?.attach_to_page_id != nil {
+      let target = args?.attach_to_block_id ?? args?.attach_to_page_id
+      steps = steps
+        + [
+        {
+          id: "append_file_block",
+          method: "PATCH",
+          url: __notion_api_url(notion_cfg.api_base_url, "/blocks/" + url_encode(to_string(target)) + "/children"),
+          body_template: {
+            children: [
+              {object: "block", type: "file", file: {type: "file_upload", file_upload: {id: "{file_upload_id}"}}},
+            ],
+          },
+        },
+      ]
+    }
+    return {
+      provider: NOTION_PROVIDER_ID,
+      kind: "artifact_import",
+      method: "POST",
+      url: __notion_api_url(notion_cfg.api_base_url, "/file_uploads"),
+      body: create_body,
+      steps: steps,
+      media: __artifact_media(args ?? {}, create_body.content_type),
+      scopes: ["Insert content"],
+    }
+  }
+  return __err(
+    "unsupported_artifact_import_mode",
+    "notion artifact import mode `" + mode + "` is not supported",
+  )
+}
+
 @complexity(allow)
 /** Perform one orchestrator-driven polling tick and return normalized events plus durable state. */
 pub fn poll_tick(ctx = nil) {
@@ -1136,7 +1362,7 @@ fn __strip_prefix(value, prefix) {
 }
 
 fn __binding_for_raw(raw) {
-  let bindings = __state()?.webhook_bindings ?? {}
+  let bindings = __state().webhook_bindings ?? {}
   let binding_id = raw?.metadata?.binding_id ?? raw?.binding_id
   if binding_id != nil {
     return bindings.get(binding_id)
@@ -1202,9 +1428,9 @@ fn __signing_secret(raw) {
     return from_binding
   }
   let state = __state()
-  let from_ctx = state?.ctx?.verification_token ?? state?.ctx?.signing_secret
-    ?? state?.ctx?.secrets?.verification_token
-    ?? state?.ctx?.secrets?.signing_secret
+  let from_ctx = state.ctx?.verification_token ?? state.ctx?.signing_secret
+    ?? state.ctx?.secrets?.verification_token
+    ?? state.ctx?.secrets?.signing_secret
   if from_ctx != nil && trim(to_string(from_ctx)) != "" {
     return to_string(from_ctx)
   }
@@ -1724,6 +1950,45 @@ fn __notion_ref(kind, id) {
   return "notion://" + to_string(kind) + "/" + to_string(id)
 }
 
+fn __mime_type_from_name(name) {
+  let text = lowercase(to_string(name ?? ""))
+  if text.ends_with(".pdf") {
+    return "application/pdf"
+  }
+  if text.ends_with(".md") || text.ends_with(".markdown") {
+    return "text/markdown"
+  }
+  if text.ends_with(".html") || text.ends_with(".htm") {
+    return "text/html"
+  }
+  if text.ends_with(".json") {
+    return "application/json"
+  }
+  if text.ends_with(".csv") {
+    return "text/csv"
+  }
+  if text.ends_with(".png") {
+    return "image/png"
+  }
+  if text.ends_with(".jpg") || text.ends_with(".jpeg") {
+    return "image/jpeg"
+  }
+  return "application/octet-stream"
+}
+
+fn __title_properties(title) {
+  return {title: {title: [{type: "text", text: {content: to_string(title ?? "Imported artifact")}}]}}
+}
+
+fn __artifact_media(args, default_mime_type) {
+  return {
+    uri: args?.uri ?? args?.path,
+    mime_type: args?.mime_type ?? args?.content_type ?? default_mime_type,
+    size_bytes: args?.size_bytes ?? args?.sizeBytes,
+    sha256: args?.sha256,
+  }
+}
+
 fn __notion_source_url(kind, id, raw_payload) {
   let object = if kind == "page" {
     __page_payload(raw_payload)
@@ -2009,14 +2274,14 @@ fn __validate_api_base_url(api_base_url) {
 }
 
 fn __outbound_config(args) {
-  let raw_api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
+  let raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   let api_base_check = __validate_api_base_url(raw_api_base_url)
   if is_err(api_base_check) {
     return api_base_check
   }
   let api_base_url = unwrap(api_base_check)
-  let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
+  let notion_version = args?.notion_version ?? __state().ctx?.notion_version
     ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   let explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
   if explicit_api_token != nil && trim(to_string(explicit_api_token)) == "" {
@@ -2029,7 +2294,7 @@ fn __outbound_config(args) {
     )
   }
   let api_token = __configured_secret(
-    explicit_api_token ?? __state()?.ctx?.api_token ?? __state()?.ctx?.secrets?.api_token,
+    explicit_api_token ?? __state().ctx?.api_token ?? __state().ctx?.secrets?.api_token,
     "api-token",
   )
     ?? harness.env.get("NOTION_TOKEN")
@@ -2052,25 +2317,25 @@ fn __outbound_config(args) {
 }
 
 fn __oauth_config(args) {
-  let raw_api_base_url = args?.api_base_url ?? __state()?.ctx?.api_base_url
+  let raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   let api_base_check = __validate_api_base_url(raw_api_base_url)
   if is_err(api_base_check) {
     return api_base_check
   }
   let api_base_url = unwrap(api_base_check)
-  let notion_version = args?.notion_version ?? __state()?.ctx?.notion_version
+  let notion_version = args?.notion_version ?? __state().ctx?.notion_version
     ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   let client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
-    ?? __state()?.ctx?.client_id
-    ?? __state()?.ctx?.oauth?.client_id
-    ?? __state()?.ctx?.secrets?.client_id
+    ?? __state().ctx?.client_id
+    ?? __state().ctx?.oauth?.client_id
+    ?? __state().ctx?.secrets?.client_id
     ?? harness.env.get("NOTION_CLIENT_ID")
   let explicit_client_secret = args?.client_secret ?? args?.oauth?.client_secret
     ?? args?.secrets?.client_secret
-    ?? __state()?.ctx?.client_secret
-    ?? __state()?.ctx?.oauth?.client_secret
-    ?? __state()?.ctx?.secrets?.client_secret
+    ?? __state().ctx?.client_secret
+    ?? __state().ctx?.oauth?.client_secret
+    ?? __state().ctx?.secrets?.client_secret
   let client_secret = __configured_secret(explicit_client_secret, "client-secret")
     ?? harness.env.get("NOTION_CLIENT_SECRET")
   if client_id == nil || trim(to_string(client_id)) == "" || client_secret == nil

@@ -1,12 +1,12 @@
 [package]
 name = "harn-notion-connector"
-version = "0.1.0"
-description = "Notion connector for Harn webhooks, polling, and outbound API dispatch."
+version = "0.1.1"
+description = "Notion connector for Harn webhooks, polling, artifact helpers, and outbound API dispatch."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/burin-labs/harn-notion-connector"
 harn = ">=0.9,<0.10"
 docs_url = "README.md"
-provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.0"
+provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.1"
 
 [exports]
 default = "src/lib.harn"
@@ -117,7 +117,7 @@ name = "harn-cloud managed ingress rejects stale signature"
 kind = "webhook"
 body = '''{"id":"evt_page_1","timestamp":"2026-04-19T12:34:56Z","type":"page.content_updated","workspace_id":"ws_test","subscription_id":"sub_test","integration_id":"int_test","actor":{"id":"user_ada","name":"Ada Lovelace"},"entity":{"id":"page_alpha","type":"page","parent":{"id":"database_tasks","type":"database"}}}'''
 headers = { "content-type" = "application/json", "x-notion-signature" = "sha256=cdfabcb5e43424d5d9e8696f5200643aad42bb8e8716e3ca08dd3e2e2bf19abc", "request-id" = "req_cloud_page_1" }
-metadata = { tenant_slug = "acme", trigger_id = "notion", binding_id = "notion", provider = "notion", package = { name = "harn-notion-connector", version = "v0.1.0" }, signature_status = "verified", secret_ids = { verification_token = "notion.webhook.secret", signing_secret = "notion.webhook.secret" }, sandbox = { tenant_id = "tenant-acme", egress_allowlist = ["api.notion.com"] } }
+metadata = { tenant_slug = "acme", trigger_id = "notion", binding_id = "notion", provider = "notion", package = { name = "harn-notion-connector", version = "v0.1.1" }, signature_status = "verified", secret_ids = { verification_token = "notion.webhook.secret", signing_secret = "notion.webhook.secret" }, sandbox = { tenant_id = "tenant-acme", egress_allowlist = ["api.notion.com"] } }
 expect_type = "reject"
 expect_response_status = 401
 expect_event_count = 0
