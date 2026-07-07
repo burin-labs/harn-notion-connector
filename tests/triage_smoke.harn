@@ -48,10 +48,10 @@ fn task_page() {
 
 pipeline default() {
   egress_policy({allow: ["api.notion.com"], default: "deny"})
-  let secret = "test-verification-token"
-  let webhook = normalize_inbound(fixture_raw("page_task_updated", secret))
+  const secret = "test-verification-token"
+  const webhook = normalize_inbound(fixture_raw("page_task_updated", secret))
   expect_eq(webhook.type, "event", "webhook triage fixture emits event")
-  let triage = webhook.event.payload.triage
+  const triage = webhook.event.payload.triage
   expect_eq(triage.schema, "harn.triage_event.v1", "triage schema marker")
   expect_eq(triage.provider, "notion", "triage provider")
   expect_eq(triage.source.kind, "task", "task-like pages are surfaced as tasks")
@@ -81,7 +81,7 @@ pipeline default() {
   expect_eq(triage.action_intents[2].requires_approval, true, "write-like intent requires approval")
   expect_eq(triage.action_intents[3].method, "comments.create", "follow-up write method explicit")
   expect_eq(triage.action_intents[3].requires_approval, true, "follow-up write requires approval")
-  let database = normalize_inbound(fixture_raw("database_created", secret))
+  const database = normalize_inbound(fixture_raw("database_created", secret))
   expect_eq(database.event.payload.triage.source.kind, "database", "database source kind")
   expect_eq(
     database.event.payload.triage.source.ref,
@@ -98,7 +98,7 @@ pipeline default() {
     "page_home",
     "database parent page provenance",
   )
-  let comment = normalize_inbound(fixture_raw("comment_created", secret))
+  const comment = normalize_inbound(fixture_raw("comment_created", secret))
   expect_eq(comment.event.payload.triage.source.kind, "comment", "comment source kind")
   expect_eq(comment.event.payload.triage.source.ref, "notion://comment/comment_delta", "comment ref")
   expect_eq(
@@ -111,7 +111,7 @@ pipeline default() {
     "page_alpha",
     "comment parent page provenance",
   )
-  let capabilities = method_capabilities()
+  const capabilities = method_capabilities()
   expect_eq(
     capabilities.get("pages.retrieve").requires_approval,
     false,
@@ -149,7 +149,7 @@ pipeline default() {
       headers: {},
     },
   )
-  let polled = poll_tick(poll_ctx())
+  const polled = poll_tick(poll_ctx())
   expect_eq(len(polled.events), 1, "poll fixture emits one event")
   expect_eq(polled.events[0].payload.triage.source.kind, "task", "poll triage task kind")
   expect_eq(
@@ -169,9 +169,9 @@ pipeline default() {
       headers: {"x-request-id": "req_forbidden"},
     },
   )
-  let forbidden = call("api_call", {request_method: "GET", path: "/pages/no_access", api_token: "secret_api"})
+  const forbidden = call("api_call", {request_method: "GET", path: "/pages/no_access", api_token: "secret_api"})
   expect(is_err(forbidden), "forbidden Notion calls return Err")
-  let err = unwrap_err(forbidden)
+  const err = unwrap_err(forbidden)
   expect_eq(err.code, "restricted_resource", "Notion error code preserved")
   expect_eq(err.status, 403, "Notion status preserved")
   expect_eq(err.auth_scope_failure.provider, "notion", "auth/scope provider marker")

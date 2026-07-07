@@ -48,7 +48,7 @@ pipeline default() {
   shutdown()
   init({api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"})
   http_mock_clear()
-  let base = "https://api.notion.com/v1"
+  const base = "https://api.notion.com/v1"
   http_mock(
     "POST",
     base + "/data_sources/ds_123/query",
@@ -65,7 +65,7 @@ pipeline default() {
       ],
     },
   )
-  let first = poll_tick(poll_ctx())
+  const first = poll_tick(poll_ctx())
   expect_eq(len(first.events), 1, "first tick emits one normalized event")
   expect_eq(first.events[0].kind, "page.content_updated", "poll event kind")
   expect_eq(first.events[0].payload.event_type, "page.content_updated", "payload event type")
@@ -80,27 +80,27 @@ pipeline default() {
   )
   expect_eq(first.cursor.last_edited_time, "2026-04-19T10:00:00Z", "first tick advances cursor")
   expect(first.state.poll_cache.get("notion.poll:page_1") != nil, "first tick persists page snapshot")
-  let second = poll_tick(poll_ctx(first.cursor, first.state))
+  const second = poll_tick(poll_ctx(first.cursor, first.state))
   expect_eq(len(second.events), 1, "second tick emits only changed/new pages")
   expect_eq(second.events[0].payload.resource_id, "page_2", "second tick new page id")
   expect_eq(second.cursor.last_edited_time, "2026-04-19T10:05:00Z", "second tick advances cursor")
-  let failed = poll_tick(poll_ctx(second.cursor, second.state))
+  const failed = poll_tick(poll_ctx(second.cursor, second.state))
   expect(is_err(failed), "retryable Notion failures return Err without advancing local state")
   expect_eq(unwrap_err(failed).code, "service_unavailable", "retry error preserves Notion code")
-  let retried = poll_tick(poll_ctx(second.cursor, second.state))
+  const retried = poll_tick(poll_ctx(second.cursor, second.state))
   expect_eq(len(retried.events), 1, "retry with same cursor can emit after transient failure")
   expect_eq(retried.events[0].payload.resource_id, "page_3", "retry emits next page")
-  let calls = http_mock_calls()
+  const calls = http_mock_calls()
   expect_eq(len(calls), 4, "one Notion query per tick")
-  let first_query_body = json_parse(calls[0].body)
+  const first_query_body = json_parse(calls[0].body)
   expect_eq(first_query_body.get("filter"), nil, "first tick has no high-water filter")
-  let second_query_body = json_parse(calls[1].body)
+  const second_query_body = json_parse(calls[1].body)
   expect_eq(
     second_query_body.get("filter").last_edited_time.after,
     "2026-04-19T10:00:00Z",
     "second tick uses Harn-managed cursor",
   )
-  let retried_query_body = json_parse(calls[3].body)
+  const retried_query_body = json_parse(calls[3].body)
   expect_eq(
     retried_query_body.get("filter").last_edited_time.after,
     "2026-04-19T10:05:00Z",
@@ -112,7 +112,7 @@ pipeline default() {
     base + "/data_sources/ds_123/query",
     {status: 200, body: list_body([page("page_1", "2026-04-19T10:00:00Z")]), headers: {}},
   )
-  let duplicate = poll_tick(poll_ctx(nil, first.state))
+  const duplicate = poll_tick(poll_ctx(nil, first.state))
   expect_eq(len(duplicate.events), 0, "persisted state dedupes identical page snapshots")
   expect_eq(
     duplicate.cursor.last_edited_time,
@@ -138,11 +138,11 @@ pipeline default() {
       ],
     },
   )
-  let capped = poll_tick(poll_ctx(nil, nil, {max_batch_size: 1}))
+  const capped = poll_tick(poll_ctx(nil, nil, {max_batch_size: 1}))
   expect_eq(len(capped.events), 1, "max_batch_size caps emitted events")
   expect_eq(capped.events[0].payload.resource_id, "page_a", "capped tick emits first event")
   expect_eq(capped.cursor, nil, "capped tick leaves cursor unchanged for retry-safe draining")
-  let drained = poll_tick(poll_ctx(capped.cursor, capped.state, {max_batch_size: 1}))
+  const drained = poll_tick(poll_ctx(capped.cursor, capped.state, {max_batch_size: 1}))
   expect_eq(len(drained.events), 1, "next capped tick drains the next uncached event")
   expect_eq(drained.events[0].payload.resource_id, "page_b", "drained tick emits second event")
   http_mock_clear()
@@ -160,7 +160,7 @@ pipeline default() {
       ],
     },
   )
-  let first_page_only = poll_tick(poll_ctx(nil, nil))
+  const first_page_only = poll_tick(poll_ctx(nil, nil))
   expect_eq(len(first_page_only.events), 1, "poll tick emits the first query page")
   expect_eq(first_page_only.events[0].payload.resource_id, "page_page_1", "first query page event")
   expect_eq(len(http_mock_calls()), 1, "poll tick does not chase provider pagination in one tick")
