@@ -4,7 +4,7 @@ version = "0.1.1"
 description = "Notion connector for Harn webhooks, polling, artifact helpers, and outbound API dispatch."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/burin-labs/harn-notion-connector"
-harn = ">=0.9,<0.10"
+harn = ">=0.10,<0.11"
 docs_url = "README.md"
 provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.1"
 
@@ -50,7 +50,7 @@ transient_provider_outage = "Retry after Notion API and webhook delivery endpoin
 # Publishable dependencies must be git-backed so this package resolves from a
 # clean consumer project without a sibling checkout.
 [dependencies]
-notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", rev = "v0.1.0" }
+notion-sdk-harn = { git = "https://github.com/burin-labs/notion-sdk-harn", rev = "v0.1.1" }
 
 [connector_contract]
 version = 1

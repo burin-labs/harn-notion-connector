@@ -11,23 +11,23 @@ pub fn notion_headers(secret, body) {
  * `json_stringify` so callers can sign over the refreshed bytes.
  */
 pub fn refresh_body_timestamp(body) {
-  let parsed = try {
+  const parsed = try {
     json_parse(body)
   }
   if is_err(parsed) {
     return body
   }
-  let payload = unwrap(parsed)
+  const payload = unwrap(parsed)
   if type_of(payload) != "dict" {
     return body
   }
-  let now_iso = date_format(harness.clock.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
+  const now_iso = date_format(harness.clock.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
   return json_stringify(payload + {timestamp: now_iso})
 }
 
 /** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
 pub fn signed_raw(secret, body, extra = nil) {
-  let fresh = refresh_body_timestamp(body)
+  const fresh = refresh_body_timestamp(body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
     + (extra ?? {})
 }
@@ -57,9 +57,9 @@ pub fn assert_notion_interface() {
   require provider_id() == "notion", "provider id"
   require kinds() == ["webhook", "poll"], "supported kinds"
   require payload_schema().harn_schema_name == "NotionEventPayload", "payload schema name"
-  let initialized = init({verification_token: "test-secret", api_token: "secret_api"})
+  const initialized = init({verification_token: "test-secret", api_token: "secret_api"})
   require initialized.initialized, "init stores state"
-  let activated = activate(
+  const activated = activate(
     [
       {
         id: "notion.webhook",

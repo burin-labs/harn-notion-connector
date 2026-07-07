@@ -54,13 +54,13 @@ import {
   upload_file,
 } from "notion-sdk-harn/default"
 
-let NOTION_PROVIDER_ID = "notion"
+const NOTION_PROVIDER_ID = "notion"
 
-var NOTION_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
+let NOTION_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 
-let NOTION_API_BASE_URL = "https://api.notion.com/v1"
+const NOTION_API_BASE_URL = "https://api.notion.com/v1"
 
-let NOTION_API_VERSION = "2026-03-11"
+const NOTION_API_VERSION = "2026-03-11"
 
 /**
  * F8: hosts permitted for outbound Notion API calls. Caller-supplied
@@ -68,9 +68,9 @@ let NOTION_API_VERSION = "2026-03-11"
  * any HTTP request so the workspace API token cannot be shipped to
  * attacker-controlled hosts.
  */
-let NOTION_ALLOWED_API_HOSTS = ["api.notion.com"]
+const NOTION_ALLOWED_API_HOSTS = ["api.notion.com"]
 
-let NOTION_OUTBOUND_METHODS = [
+const NOTION_OUTBOUND_METHODS = [
   "blocks.retrieve",
   "blocks.update",
   "blocks.delete",
@@ -124,7 +124,7 @@ let NOTION_OUTBOUND_METHODS = [
   "api_call",
 ]
 
-let NOTION_WRITE_METHODS = [
+const NOTION_WRITE_METHODS = [
   "blocks.update",
   "blocks.delete",
   "blocks.children.append",
@@ -153,9 +153,9 @@ let NOTION_WRITE_METHODS = [
   "api_call",
 ]
 
-let NOTION_TRIAGE_SCHEMA = "harn.triage_event.v1"
+const NOTION_TRIAGE_SCHEMA = "harn.triage_event.v1"
 
-let NOTION_CONTROL_ARG_FIELDS = [
+const NOTION_CONTROL_ARG_FIELDS = [
   "api_base_url",
   "api_token",
   "token",
@@ -251,9 +251,9 @@ pub fn payload_schema() {
 
 /** Return side-effect metadata for outbound methods so hosts can gate writes. */
 pub fn method_capabilities() {
-  var methods = {}
+  let methods = {}
   for method in NOTION_OUTBOUND_METHODS {
-    let writes = contains(NOTION_WRITE_METHODS, method)
+    const writes = contains(NOTION_WRITE_METHODS, method)
     methods[method] = {
       method: method,
       side_effect: if writes {
@@ -269,23 +269,23 @@ pub fn method_capabilities() {
 
 /** Initialize connector state with orchestrator context. */
 pub fn init(ctx = nil) {
-  let next = __default_state() + {initialized: true, ctx: ctx ?? {}}
+  const next = __default_state() + {initialized: true, ctx: ctx ?? {}}
   __set_state(next)
   return next
 }
 
 /** Activate webhook and poll bindings, storing normalized binding config. */
 pub fn activate(bindings = []) {
-  var webhook_bindings = {}
-  var poll_bindings = {}
-  var seen_paths = {}
+  let webhook_bindings = {}
+  let poll_bindings = {}
+  let seen_paths = {}
   for binding in bindings ?? [] {
-    let binding_id = (binding?.binding_id ?? binding?.id ?? "binding-")
+    const binding_id = (binding?.binding_id ?? binding?.id ?? "binding-")
       + to_string(len(webhook_bindings.keys()) + len(poll_bindings.keys()))
-    let kind = binding?.kind ?? binding?.source?.kind ?? binding?.config?.kind ?? "webhook"
-    let normalized = binding + {binding_id: binding_id, kind: kind}
+    const kind = binding?.kind ?? binding?.source?.kind ?? binding?.config?.kind ?? "webhook"
+    const normalized = binding + {binding_id: binding_id, kind: kind}
     if kind == "webhook" {
-      let path = binding?.path ?? binding?.match?.path ?? binding?.config?.match?.path
+      const path = binding?.path ?? binding?.match?.path ?? binding?.config?.match?.path
       if path != nil && path != "" {
         if seen_paths.get(path) {
           return __err("activation", "notion connector path `" + path + "` is configured by multiple bindings")
@@ -294,7 +294,7 @@ pub fn activate(bindings = []) {
       }
       webhook_bindings[binding_id] = normalized
     } else if kind == "poll" {
-      let poll = __normalize_poll_binding(normalized)
+      const poll = __normalize_poll_binding(normalized)
       if is_err(poll) {
         return poll
       }
@@ -303,7 +303,7 @@ pub fn activate(bindings = []) {
       return __err("activation", "unsupported notion binding kind `" + to_string(kind) + "`")
     }
   }
-  let next = __state()
+  const next = __state()
     + {active: true, webhook_bindings: webhook_bindings, poll_bindings: poll_bindings}
   __set_state(next)
   return {
@@ -330,17 +330,17 @@ pub fn shutdown() {
  * that only provide a parsed body.
  */
 pub fn normalize_inbound(raw) {
-  let body_text = __body_text(raw)
+  const body_text = __body_text(raw)
   if is_err(body_text) {
     return __reject_err(unwrap_err(body_text))
   }
-  let parsed = try {
+  const parsed = try {
     json_parse(unwrap(body_text))
   }
   if is_err(parsed) {
     return __reject(400, "invalid_json", "notion payload body is not valid JSON")
   }
-  let payload = unwrap(parsed)
+  const payload = unwrap(parsed)
   if payload?.type == "subscription.verification"
     && payload?.verification_token != nil
     && trim(to_string(payload.verification_token)) != "" {
@@ -349,7 +349,7 @@ pub fn normalize_inbound(raw) {
     // pipe an unbounded blob through the connector, and emit under a
     // dedicated kind so downstream code must handle the unsigned path
     // explicitly rather than treating it as a generic event.
-    let raw_token = trim(to_string(payload.verification_token))
+    const raw_token = trim(to_string(payload.verification_token))
     if len(raw_token) > NOTION_VERIFICATION_TOKEN_MAX_LEN {
       return __reject(
         400,
@@ -358,21 +358,21 @@ pub fn normalize_inbound(raw) {
           + " chars",
       )
     }
-    let event = __build_event("notion.subscription.verification", payload, raw, "unsigned")
+    const event = __build_event("notion.subscription.verification", payload, raw, "unsigned")
     return {type: "event", event: event}
   }
-  let verified = __verify_notion_signature(raw, raw?.headers ?? {}, unwrap(body_text))
+  const verified = __verify_notion_signature(raw, raw?.headers ?? {}, unwrap(body_text))
   if is_err(verified) {
     return __reject_err(unwrap_err(verified))
   }
   // F6: enforce a freshness window against the trusted clock so a captured
   // signed webhook cannot be replayed indefinitely. Notion supplies an ISO
   // timestamp in payload.timestamp.
-  let freshness = __notion_freshness_check(payload)
+  const freshness = __notion_freshness_check(payload)
   if is_err(freshness) {
     return __reject_err(unwrap_err(freshness))
   }
-  let event = __build_event(payload?.type ?? "notion.webhook", payload, raw, "verified")
+  const event = __build_event(payload?.type ?? "notion.webhook", payload, raw, "verified")
   return {type: "event", event: event}
 }
 
@@ -381,36 +381,36 @@ pub fn normalize_inbound(raw) {
  * subscription.verification handshake. Notion's real tokens are < 100
  * chars, so 512 is generous.
  */
-let NOTION_VERIFICATION_TOKEN_MAX_LEN = 512
+const NOTION_VERIFICATION_TOKEN_MAX_LEN = 512
 
 /**
  * F6: cap on the age of a signed Notion webhook before we reject it as a
  * potential replay. Mirrors Slack's 300-second policy.
  */
-let NOTION_REPLAY_WINDOW_SECONDS = 300
+const NOTION_REPLAY_WINDOW_SECONDS = 300
 
 fn __notion_freshness_check(payload) {
-  let raw_ts = payload?.timestamp
+  const raw_ts = payload?.timestamp
   if raw_ts == nil {
     return Ok(true)
   }
-  let now = date_now().timestamp
-  var event_seconds = nil
-  let kind = type_of(raw_ts)
+  const now = date_now().timestamp
+  let event_seconds = nil
+  const kind = type_of(raw_ts)
   if kind == "int" || kind == "float" {
     event_seconds = raw_ts
   } else {
-    let text = trim(to_string(raw_ts))
+    const text = trim(to_string(raw_ts))
     if text == "" {
       return Ok(true)
     }
-    let parsed = try {
+    const parsed = try {
       date_parse(text)
     }
     if !is_err(parsed) && unwrap(parsed) != nil {
       event_seconds = unwrap(parsed)
     } else {
-      let numeric = try {
+      const numeric = try {
         to_float(text)
       }
       if !is_err(numeric) && unwrap(numeric) != nil {
@@ -421,7 +421,7 @@ fn __notion_freshness_check(payload) {
   if event_seconds == nil {
     return Ok(true)
   }
-  let delta = if now >= event_seconds {
+  const delta = if now >= event_seconds {
     now - event_seconds
   } else {
     event_seconds - now
@@ -452,13 +452,13 @@ pub fn call(method, args = {}) {
   if to_string(method).starts_with("oauth.") {
     return __oauth_call(method, args ?? {})
   }
-  let config = __outbound_config(args ?? {})
+  const config = __outbound_config(args ?? {})
   if is_err(config) {
     return config
   }
-  let cfg = unwrap(config)
+  const cfg = unwrap(config)
   if method == "blocks.retrieve" {
-    let block_id = __required_id(args, "block_id", "blocks.retrieve")
+    const block_id = __required_id(args, "block_id", "blocks.retrieve")
     if is_err(block_id) {
       return block_id
     }
@@ -469,7 +469,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "blocks.update" {
-    let block_id = __required_id(args, "block_id", "blocks.update")
+    const block_id = __required_id(args, "block_id", "blocks.update")
     if is_err(block_id) {
       return block_id
     }
@@ -480,7 +480,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "blocks.delete" {
-    let block_id = __required_id(args, "block_id", "blocks.delete")
+    const block_id = __required_id(args, "block_id", "blocks.delete")
     if is_err(block_id) {
       return block_id
     }
@@ -491,7 +491,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "blocks.children.list" {
-    let block_id = __required_id(args, "block_id", "blocks.children.list")
+    const block_id = __required_id(args, "block_id", "blocks.children.list")
     if is_err(block_id) {
       return block_id
     }
@@ -502,7 +502,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "pages.retrieve" {
-    let page_id = __required_id(args, "page_id", "pages.retrieve")
+    const page_id = __required_id(args, "page_id", "pages.retrieve")
     if is_err(page_id) {
       return page_id
     }
@@ -520,7 +520,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "pages.update" {
-    let page_id = __required_id(args, "page_id", "pages.update")
+    const page_id = __required_id(args, "page_id", "pages.update")
     if is_err(page_id) {
       return page_id
     }
@@ -531,7 +531,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "pages.markdown.retrieve" {
-    let page_id = __required_id(args, "page_id", "pages.markdown.retrieve")
+    const page_id = __required_id(args, "page_id", "pages.markdown.retrieve")
     if is_err(page_id) {
       return page_id
     }
@@ -542,7 +542,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "pages.markdown.update" {
-    let page_id = __required_id(args, "page_id", "pages.markdown.update")
+    const page_id = __required_id(args, "page_id", "pages.markdown.update")
     if is_err(page_id) {
       return page_id
     }
@@ -553,7 +553,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "pages.move" {
-    let page_id = __required_id(args, "page_id", "pages.move")
+    const page_id = __required_id(args, "page_id", "pages.move")
     if is_err(page_id) {
       return page_id
     }
@@ -564,11 +564,11 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "pages.properties.retrieve" {
-    let page_id = __required_id(args, "page_id", "pages.properties.retrieve")
+    const page_id = __required_id(args, "page_id", "pages.properties.retrieve")
     if is_err(page_id) {
       return page_id
     }
-    let property_id = __required_id(args, "property_id", "pages.properties.retrieve")
+    const property_id = __required_id(args, "property_id", "pages.properties.retrieve")
     if is_err(property_id) {
       return property_id
     }
@@ -592,7 +592,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "databases.retrieve" {
-    let database_id = __required_id(args, "database_id", "databases.retrieve")
+    const database_id = __required_id(args, "database_id", "databases.retrieve")
     if is_err(database_id) {
       return database_id
     }
@@ -603,7 +603,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "databases.update" {
-    let database_id = __required_id(args, "database_id", "databases.update")
+    const database_id = __required_id(args, "database_id", "databases.update")
     if is_err(database_id) {
       return database_id
     }
@@ -614,7 +614,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "databases.query" {
-    let database_id = __required_id(args, "database_id", "databases.query")
+    const database_id = __required_id(args, "database_id", "databases.query")
     if is_err(database_id) {
       return database_id
     }
@@ -636,7 +636,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "data_sources.retrieve" {
-    let data_source_id = __required_id(args, "data_source_id", "data_sources.retrieve")
+    const data_source_id = __required_id(args, "data_source_id", "data_sources.retrieve")
     if is_err(data_source_id) {
       return data_source_id
     }
@@ -647,7 +647,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "data_sources.update" {
-    let data_source_id = __required_id(args, "data_source_id", "data_sources.update")
+    const data_source_id = __required_id(args, "data_source_id", "data_sources.update")
     if is_err(data_source_id) {
       return data_source_id
     }
@@ -662,7 +662,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "data_sources.query" {
-    let data_source_id = __required_id(args, "data_source_id", "data_sources.query")
+    const data_source_id = __required_id(args, "data_source_id", "data_sources.query")
     if is_err(data_source_id) {
       return data_source_id
     }
@@ -678,7 +678,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "data_sources.templates.list" {
-    let data_source_id = __required_id(args, "data_source_id", "data_sources.templates.list")
+    const data_source_id = __required_id(args, "data_source_id", "data_sources.templates.list")
     if is_err(data_source_id) {
       return data_source_id
     }
@@ -695,11 +695,11 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "blocks.children.append" {
-    let block_id = args?.block_id ?? args?.page_id ?? args?.id
+    const block_id = args?.block_id ?? args?.page_id ?? args?.id
     if block_id == nil || block_id == "" {
       return __err("invalid_args", "blocks.children.append requires block_id")
     }
-    var body = __call_body(args, ["block_id", "page_id", "id", "blocks"])
+    let body = __call_body(args, ["block_id", "page_id", "id", "blocks"])
     if body?.children == nil && args?.blocks != nil {
       body.children = args.blocks
     }
@@ -717,8 +717,8 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "comments.create" {
-    let body = __call_body(args)
-    let variant = if body?.discussion_id != nil && body?.markdown != nil {
+    const body = __call_body(args)
+    const variant = if body?.discussion_id != nil && body?.markdown != nil {
       create_a_comment_variant4(body.discussion_id, body.markdown)
     } else if body?.markdown != nil {
       create_a_comment_variant2(body.markdown, body?.parent ?? {})
@@ -741,7 +741,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "comments.retrieve" {
-    let comment_id = __required_id(args, "comment_id", "comments.retrieve")
+    const comment_id = __required_id(args, "comment_id", "comments.retrieve")
     if is_err(comment_id) {
       return comment_id
     }
@@ -752,7 +752,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "comments.update" {
-    let comment_id = __required_id(args, "comment_id", "comments.update")
+    const comment_id = __required_id(args, "comment_id", "comments.update")
     if is_err(comment_id) {
       return comment_id
     }
@@ -763,7 +763,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "comments.delete" {
-    let comment_id = __required_id(args, "comment_id", "comments.delete")
+    const comment_id = __required_id(args, "comment_id", "comments.delete")
     if is_err(comment_id) {
       return comment_id
     }
@@ -795,7 +795,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "file_uploads.retrieve" {
-    let file_upload_id = __required_id(args, "file_upload_id", "file_uploads.retrieve")
+    const file_upload_id = __required_id(args, "file_upload_id", "file_uploads.retrieve")
     if is_err(file_upload_id) {
       return file_upload_id
     }
@@ -806,7 +806,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "file_uploads.complete" {
-    let file_upload_id = __required_id(args, "file_upload_id", "file_uploads.complete")
+    const file_upload_id = __required_id(args, "file_upload_id", "file_uploads.complete")
     if is_err(file_upload_id) {
       return file_upload_id
     }
@@ -817,7 +817,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "file_uploads.send" {
-    let file_upload_id = __required_id(args, "file_upload_id", "file_uploads.send")
+    const file_upload_id = __required_id(args, "file_upload_id", "file_uploads.send")
     if is_err(file_upload_id) {
       return file_upload_id
     }
@@ -842,7 +842,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "users.retrieve" {
-    let user_id = __required_id(args, "user_id", "users.retrieve")
+    const user_id = __required_id(args, "user_id", "users.retrieve")
     if is_err(user_id) {
       return user_id
     }
@@ -873,7 +873,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "views.retrieve" {
-    let view_id = __required_id(args, "view_id", "views.retrieve")
+    const view_id = __required_id(args, "view_id", "views.retrieve")
     if is_err(view_id) {
       return view_id
     }
@@ -884,7 +884,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "views.update" {
-    let view_id = __required_id(args, "view_id", "views.update")
+    const view_id = __required_id(args, "view_id", "views.update")
     if is_err(view_id) {
       return view_id
     }
@@ -895,7 +895,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "views.delete" {
-    let view_id = __required_id(args, "view_id", "views.delete")
+    const view_id = __required_id(args, "view_id", "views.delete")
     if is_err(view_id) {
       return view_id
     }
@@ -906,7 +906,7 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "views.queries.create" {
-    let view_id = __required_id(args, "view_id", "views.queries.create")
+    const view_id = __required_id(args, "view_id", "views.queries.create")
     if is_err(view_id) {
       return view_id
     }
@@ -917,11 +917,11 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "views.queries.results" || method == "views.queries.retrieve" {
-    let view_id = __required_id(args, "view_id", "views.queries.results")
+    const view_id = __required_id(args, "view_id", "views.queries.results")
     if is_err(view_id) {
       return view_id
     }
-    let query_id = __required_id(args, "query_id", "views.queries.results")
+    const query_id = __required_id(args, "query_id", "views.queries.results")
     if is_err(query_id) {
       return query_id
     }
@@ -938,11 +938,11 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "views.queries.delete" {
-    let view_id = __required_id(args, "view_id", "views.queries.delete")
+    const view_id = __required_id(args, "view_id", "views.queries.delete")
     if is_err(view_id) {
       return view_id
     }
-    let query_id = __required_id(args, "query_id", "views.queries.delete")
+    const query_id = __required_id(args, "query_id", "views.queries.delete")
     if is_err(query_id) {
       return query_id
     }
@@ -953,8 +953,8 @@ pub fn call(method, args = {}) {
     )
   }
   if method == "api_call" {
-    let request_method = args?.request_method ?? args?.http_method ?? args?.method ?? "GET"
-    let path = args?.path
+    const request_method = args?.request_method ?? args?.http_method ?? args?.method ?? "GET"
+    const path = args?.path
     if path == nil || path == "" {
       return __err("invalid_args", "api_call requires path")
     }
@@ -976,21 +976,21 @@ pub fn call(method, args = {}) {
 
 /** Build a deterministic Notion export descriptor for a page, block tree, or file URL. */
 pub fn artifact_export_request(args = {}) {
-  let cfg = __outbound_config(args ?? {})
+  const cfg = __outbound_config(args ?? {})
   if is_err(cfg) {
     return cfg
   }
-  let notion_cfg = unwrap(cfg)
-  let format = lowercase(to_string(args?.format ?? "blocks"))
+  const notion_cfg = unwrap(cfg)
+  const format = lowercase(to_string(args?.format ?? "blocks"))
   if format == "pdf" {
     return __err(
       "unsupported_pdf_export",
       "Notion's public API does not provide an official page-to-PDF export endpoint",
     )
   }
-  let direct_file_url = args?.file_url ?? args?.url ?? args?.notion_file?.url ?? args?.file?.url
+  const direct_file_url = args?.file_url ?? args?.url ?? args?.notion_file?.url ?? args?.file?.url
   if direct_file_url != nil && trim(to_string(direct_file_url)) != "" {
-    let name = to_string(args?.name ?? args?.filename ?? "notion-file")
+    const name = to_string(args?.name ?? args?.filename ?? "notion-file")
     return {
       provider: NOTION_PROVIDER_ID,
       kind: "artifact_export",
@@ -1005,11 +1005,11 @@ pub fn artifact_export_request(args = {}) {
       scopes: ["Read content"],
     }
   }
-  let page_id = __required_id(args, "page_id", "artifact.export_request")
+  const page_id = __required_id(args, "page_id", "artifact.export_request")
   if is_err(page_id) {
     return page_id
   }
-  let page = unwrap(page_id)
+  const page = unwrap(page_id)
   if format == "page" || format == "metadata" {
     return {
       provider: NOTION_PROVIDER_ID,
@@ -1064,14 +1064,14 @@ pub fn artifact_export_request(args = {}) {
 
 /** Build deterministic Notion import descriptors for generated page/block/file artifacts. */
 pub fn artifact_import_request(args = {}) {
-  let cfg = __outbound_config(args ?? {})
+  const cfg = __outbound_config(args ?? {})
   if is_err(cfg) {
     return cfg
   }
-  let notion_cfg = unwrap(cfg)
-  let mode = lowercase(to_string(args?.mode ?? args?.import_mode ?? "append_blocks"))
+  const notion_cfg = unwrap(cfg)
+  const mode = lowercase(to_string(args?.mode ?? args?.import_mode ?? "append_blocks"))
   if mode == "create_page" || mode == "page" {
-    let parent = args?.parent
+    const parent = args?.parent
     if parent == nil {
       return __err("invalid_args", "notion create_page artifact import requires parent")
     }
@@ -1092,7 +1092,7 @@ pub fn artifact_import_request(args = {}) {
     }
   }
   if mode == "append_blocks" || mode == "blocks" {
-    let block_id = args?.block_id ?? args?.page_id
+    const block_id = args?.block_id ?? args?.page_id
     if block_id == nil || trim(to_string(block_id)) == "" {
       return __err("invalid_args", "notion append_blocks artifact import requires block_id or page_id")
     }
@@ -1110,17 +1110,17 @@ pub fn artifact_import_request(args = {}) {
     }
   }
   if mode == "external_file" || mode == "file_upload" {
-    let filename = args?.filename ?? args?.name
+    const filename = args?.filename ?? args?.name
     if filename == nil || trim(to_string(filename)) == "" {
       return __err("invalid_args", "notion file artifact import requires filename or name")
     }
-    let external_url = args?.external_url ?? args?.url
-    let upload_mode = if external_url == nil {
+    const external_url = args?.external_url ?? args?.url
+    const upload_mode = if external_url == nil {
       to_string(args?.upload_mode ?? "single_part")
     } else {
       "external_url"
     }
-    var create_body = {
+    let create_body = {
       mode: upload_mode,
       filename: to_string(filename),
       content_type: args?.content_type ?? args?.mime_type ?? __mime_type_from_name(filename),
@@ -1128,7 +1128,7 @@ pub fn artifact_import_request(args = {}) {
     if external_url != nil {
       create_body.external_url = external_url
     }
-    var steps = [
+    let steps = [
       {
         id: "create_file_upload",
         method: "POST",
@@ -1159,7 +1159,7 @@ pub fn artifact_import_request(args = {}) {
       ]
     }
     if args?.attach_to_block_id != nil || args?.attach_to_page_id != nil {
-      let target = args?.attach_to_block_id ?? args?.attach_to_page_id
+      const target = args?.attach_to_block_id ?? args?.attach_to_page_id
       steps = steps
         + [
         {
@@ -1194,37 +1194,37 @@ pub fn artifact_import_request(args = {}) {
 @complexity(allow)
 /** Perform one orchestrator-driven polling tick and return normalized events plus durable state. */
 pub fn poll_tick(ctx = nil) {
-  let binding_source = ctx?.binding ?? ctx
+  const binding_source = ctx?.binding ?? ctx
   if binding_source == nil {
     return {events: [], cursor: nil, state: nil}
   }
-  let binding = __normalize_poll_binding(binding_source)
+  const binding = __normalize_poll_binding(binding_source)
   if is_err(binding) {
     if to_string(ctx?.binding_id ?? "").starts_with("contract-") {
       return {events: [], cursor: ctx?.cursor, state: ctx?.state}
     }
     return binding
   }
-  let poll_binding = unwrap(binding)
-  let high_water = __cursor_high_water(ctx?.cursor, poll_binding.high_water_mark)
-  let pages_result = __query_pages_since(poll_binding, high_water)
+  const poll_binding = unwrap(binding)
+  const high_water = __cursor_high_water(ctx?.cursor, poll_binding.high_water_mark)
+  const pages_result = __query_pages_since(poll_binding, high_water)
   if is_err(pages_result) {
     return pages_result
   }
-  let max_batch_size = __poll_max_batch_size(ctx, poll_binding)
-  var state = __poll_state(ctx?.state)
-  var poll_cache = state.poll_cache
-  var emitted = []
-  var max_seen = high_water
-  var capped = false
+  const max_batch_size = __poll_max_batch_size(ctx, poll_binding)
+  let state = __poll_state(ctx?.state)
+  let poll_cache = state.poll_cache
+  let emitted = []
+  let max_seen = high_water
+  let capped = false
   for page in unwrap(pages_result) {
-    let entity_id = page?.id
-    let last_edited_time = page?.last_edited_time
+    const entity_id = page?.id
+    const last_edited_time = page?.last_edited_time
     if entity_id == nil || last_edited_time == nil {
       continue
     }
-    let cache_key = poll_binding.binding_id + ":" + to_string(entity_id)
-    let previous = poll_cache.get(cache_key)
+    const cache_key = poll_binding.binding_id + ":" + to_string(entity_id)
+    const previous = poll_cache.get(cache_key)
     if previous?.snapshot != nil && previous.snapshot == page {
       if max_seen == nil || to_string(last_edited_time) > to_string(max_seen) {
         max_seen = last_edited_time
@@ -1273,7 +1273,7 @@ fn __err(code, message) {
 }
 
 fn __auth_scope_failure(status, code) {
-  let normalized_code = to_string(code ?? "")
+  const normalized_code = to_string(code ?? "")
   if normalized_code == "missing_api_token" {
     return {
       provider: NOTION_PROVIDER_ID,
@@ -1288,7 +1288,7 @@ fn __auth_scope_failure(status, code) {
       recovery: "Provide Notion OAuth client_id and client_secret credentials before calling OAuth token methods.",
     }
   }
-  let scope_codes = ["unauthorized", "restricted_resource", "insufficient_permissions", "missing_scopes"]
+  const scope_codes = ["unauthorized", "restricted_resource", "insufficient_permissions", "missing_scopes"]
   if status == 401 || status == 403 || contains(scope_codes, normalized_code) {
     return {
       provider: NOTION_PROVIDER_ID,
@@ -1311,9 +1311,9 @@ fn __reject(status, code, message) {
 }
 
 fn __reject_err(err) {
-  let code = err?.code ?? "rejected"
-  let message = err?.message ?? "request rejected"
-  let status = if code == "missing_signature" || code == "invalid_signature" || code == "missing_secret"
+  const code = err?.code ?? "rejected"
+  const message = err?.message ?? "request rejected"
+  const status = if code == "missing_signature" || code == "invalid_signature" || code == "missing_secret"
     || code == "timestamp_out_of_window" {
     401
   } else {
@@ -1324,7 +1324,7 @@ fn __reject_err(err) {
 
 fn __body_text(raw) {
   if raw?.raw_body != nil {
-    let decoded = try {
+    const decoded = try {
       bytes_to_string(raw.raw_body)
     }
     if is_ok(decoded) {
@@ -1344,7 +1344,7 @@ fn __body_text(raw) {
 }
 
 fn __header(headers, name) {
-  let wanted = lowercase(name)
+  const wanted = lowercase(name)
   for entry in (headers ?? {}).entries() {
     if lowercase(trim(to_string(entry.key))) == wanted {
       return trim(to_string(entry.value))
@@ -1354,7 +1354,7 @@ fn __header(headers, name) {
 }
 
 fn __strip_prefix(value, prefix) {
-  let text = to_string(value)
+  const text = to_string(value)
   if text.starts_with(prefix) {
     return text[len(prefix):len(text)]
   }
@@ -1362,12 +1362,12 @@ fn __strip_prefix(value, prefix) {
 }
 
 fn __binding_for_raw(raw) {
-  let bindings = __state().webhook_bindings ?? {}
-  let binding_id = raw?.metadata?.binding_id ?? raw?.binding_id
+  const bindings = __state().webhook_bindings ?? {}
+  const binding_id = raw?.metadata?.binding_id ?? raw?.binding_id
   if binding_id != nil {
     return bindings.get(binding_id)
   }
-  let values = bindings.values()
+  const values = bindings.values()
   if len(values) == 1 {
     return values[0]
   }
@@ -1375,19 +1375,19 @@ fn __binding_for_raw(raw) {
 }
 
 fn __signing_secret(raw) {
-  let direct = __configured_secret(raw?.verification_token, "verification_token")
+  const direct = __configured_secret(raw?.verification_token, "verification_token")
     ?? __configured_secret(raw?.signing_secret, "signing_secret")
     ?? __configured_secret(raw?.secret, "secret")
   if direct != nil && trim(to_string(direct)) != "" {
     return direct
   }
-  let metadata_alias = __secret_alias(raw, "verification_token")
+  const metadata_alias = __secret_alias(raw, "verification_token")
     ?? __secret_alias(raw, "signing_secret")
     ?? __secret_alias(raw, "secret")
   if metadata_alias != nil && trim(to_string(metadata_alias)) != "" {
     return metadata_alias
   }
-  let configured = __configured_secret(
+  const configured = __configured_secret(
     raw?.config?.verification_token ?? raw?.secrets?.verification_token
       ?? raw?.metadata?.secrets?.verification_token,
     "verification_token",
@@ -1401,14 +1401,14 @@ fn __signing_secret(raw) {
   if configured != nil && trim(to_string(configured)) != "" {
     return configured
   }
-  let metadata_secret = __configured_secret(raw?.metadata?.verification_token, "verification_token")
+  const metadata_secret = __configured_secret(raw?.metadata?.verification_token, "verification_token")
     ?? __configured_secret(raw?.metadata?.signing_secret, "signing_secret")
     ?? __configured_secret(raw?.metadata?.secret, "secret")
   if metadata_secret != nil && trim(to_string(metadata_secret)) != "" {
     return metadata_secret
   }
-  let binding = __binding_for_raw(raw)
-  let from_binding = __configured_secret(
+  const binding = __binding_for_raw(raw)
+  const from_binding = __configured_secret(
     binding?.verification_token ?? binding?.secrets?.verification_token
       ?? binding?.config?.verification_token
       ?? binding?.config?.secrets?.verification_token,
@@ -1427,8 +1427,8 @@ fn __signing_secret(raw) {
   if from_binding != nil && trim(to_string(from_binding)) != "" {
     return from_binding
   }
-  let state = __state()
-  let from_ctx = state.ctx?.verification_token ?? state.ctx?.signing_secret
+  const state = __state()
+  const from_ctx = state.ctx?.verification_token ?? state.ctx?.signing_secret
     ?? state.ctx?.secrets?.verification_token
     ?? state.ctx?.secrets?.signing_secret
   if from_ctx != nil && trim(to_string(from_ctx)) != "" {
@@ -1444,7 +1444,7 @@ fn __signing_secret(raw) {
  * secrets if the secret backend doesn't enforce isolation.
  */
 fn __is_allowed_notion_secret_id(value) {
-  let raw = trim(to_string(value ?? ""))
+  const raw = trim(to_string(value ?? ""))
   if raw == "" {
     return false
   }
@@ -1455,14 +1455,14 @@ fn __configured_secret(value, fallback_name) {
   if value == nil || trim(to_string(value)) == "" {
     return nil
   }
-  let text = trim(to_string(value))
+  const text = trim(to_string(value))
   if contains(text, "/") || contains(text, ".") {
     // F9: refuse to dereference caller-supplied IDs outside the notion/
     // namespace. Treat the value as a literal secret instead.
     if !__is_allowed_notion_secret_id(text) {
       return text
     }
-    let resolved = __secret_get_candidates(
+    const resolved = __secret_get_candidates(
       [
         __secret_id_candidate(text, fallback_name),
         NOTION_PROVIDER_ID + "/" + to_string(fallback_name),
@@ -1477,8 +1477,8 @@ fn __configured_secret(value, fallback_name) {
 }
 
 fn __secret_alias(raw, name) {
-  let metadata = raw?.metadata ?? {}
-  let value = metadata?.secret_ids?.get(name) ?? metadata?.config?.secret_ids?.get(name)
+  const metadata = raw?.metadata ?? {}
+  const value = metadata?.secret_ids?.get(name) ?? metadata?.config?.secret_ids?.get(name)
     ?? raw?.config?.secret_ids?.get(name)
     ?? raw?.secrets?.secret_ids?.get(name)
   if value == nil || trim(to_string(value)) == "" {
@@ -1497,7 +1497,7 @@ fn __secret_id_candidate(value, fallback_name) {
   if value == nil || trim(to_string(value)) == "" {
     return nil
   }
-  let text = trim(to_string(value))
+  const text = trim(to_string(value))
   if contains(text, "/") || contains(text, ".") {
     // F9: refuse to resolve caller-supplied secret IDs outside the notion/
     // namespace. The caller can still pass a literal value through other
@@ -1515,7 +1515,7 @@ fn __secret_id_candidate(value, fallback_name) {
 
 fn __secret_get_candidates(secret_ids) {
   for secret_id in secret_ids ?? [] {
-    let secret = __secret_get_optional(secret_id)
+    const secret = __secret_get_optional(secret_id)
     if secret != nil && trim(to_string(secret)) != "" {
       return secret
     }
@@ -1527,7 +1527,7 @@ fn __secret_get_optional(secret_id) {
   if secret_id == nil || trim(to_string(secret_id)) == "" {
     return nil
   }
-  let resolved = try {
+  const resolved = try {
     secret_get(to_string(secret_id))
   }
   if is_err(resolved) {
@@ -1537,16 +1537,16 @@ fn __secret_get_optional(secret_id) {
 }
 
 fn __verify_notion_signature(raw, headers, body_text) {
-  let signature = __header(headers, "x-notion-signature")
+  const signature = __header(headers, "x-notion-signature")
   if signature == nil || signature == "" {
     return __err("missing_signature", "missing x-notion-signature header")
   }
-  let secret = __signing_secret(raw)
+  const secret = __signing_secret(raw)
   if secret == nil || trim(to_string(secret)) == "" {
     return __err("missing_secret", "notion verification_token or signing_secret is required")
   }
-  let provided = __strip_prefix(signature, "sha256=")
-  let expected = hmac_sha256(to_string(secret), body_text)
+  const provided = __strip_prefix(signature, "sha256=")
+  const expected = hmac_sha256(to_string(secret), body_text)
   if !constant_time_eq(expected, provided) {
     return __err("invalid_signature", "x-notion-signature did not match the request body")
   }
@@ -1554,9 +1554,9 @@ fn __verify_notion_signature(raw, headers, body_text) {
 }
 
 fn __normalize_event(event_type, payload, raw) {
-  let headers = raw?.headers ?? {}
-  let resource_id = __resource_id(payload)
-  let entity_type = payload?.entity?.type ?? payload?.page?.object ?? payload?.database?.object
+  const headers = raw?.headers ?? {}
+  const resource_id = __resource_id(payload)
+  const entity_type = payload?.entity?.type ?? payload?.page?.object ?? payload?.database?.object
     ?? payload?.data_source?.object
   return {
     provider: NOTION_PROVIDER_ID,
@@ -1591,17 +1591,17 @@ fn __normalize_event(event_type, payload, raw) {
 }
 
 fn __build_event(event_type, payload, raw, signature_status) {
-  var normalized_payload = __normalize_event(event_type, payload, raw)
+  let normalized_payload = __normalize_event(event_type, payload, raw)
   // F5: only surface verification_token on the dedicated unsigned-verification
   // event kind. Strip it from generic signed events so attacker-supplied
   // strings (entity_id and friends) cannot piggyback through the payload.
   if to_string(event_type) != "notion.subscription.verification" {
     normalized_payload.verification_token = nil
   }
-  let occurred_at = normalized_payload.occurred_at
-  let resource_id = normalized_payload.resource_id
-  let headers = __event_headers(raw?.headers ?? {})
-  let dedupe_key = __dedupe_key(event_type, resource_id, raw, payload)
+  const occurred_at = normalized_payload.occurred_at
+  const resource_id = normalized_payload.resource_id
+  const headers = __event_headers(raw?.headers ?? {})
+  const dedupe_key = __dedupe_key(event_type, resource_id, raw, payload)
   normalized_payload.triage = __triage_event(event_type, normalized_payload, payload, dedupe_key)
   return {
     kind: to_string(event_type),
@@ -1614,20 +1614,20 @@ fn __build_event(event_type, payload, raw, signature_status) {
 }
 
 fn __event_headers(raw_headers) {
-  var headers = {}
-  let signature = __header(raw_headers, "x-notion-signature")
+  let headers = {}
+  const signature = __header(raw_headers, "x-notion-signature")
   if signature != nil {
     headers["x-notion-signature"] = signature
   }
-  let notion_request_id = __header(raw_headers, "x-notion-request-id")
+  const notion_request_id = __header(raw_headers, "x-notion-request-id")
   if notion_request_id != nil {
     headers["x-notion-request-id"] = notion_request_id
   }
-  let request_id = __header(raw_headers, "request-id")
+  const request_id = __header(raw_headers, "request-id")
   if request_id != nil {
     headers["request-id"] = request_id
   }
-  let x_request_id = __header(raw_headers, "x-request-id")
+  const x_request_id = __header(raw_headers, "x-request-id")
   if x_request_id != nil {
     headers["x-request-id"] = x_request_id
   }
@@ -1640,11 +1640,11 @@ fn __request_id(headers) {
 }
 
 fn __dedupe_key(event_type, resource_id, raw, payload) {
-  let timestamp = payload?.timestamp ?? payload?.occurred_at ?? ""
+  const timestamp = payload?.timestamp ?? payload?.occurred_at ?? ""
   if resource_id != nil && resource_id != "" && timestamp != "" {
     return "notion:" + to_string(event_type) + ":" + to_string(resource_id) + ":" + to_string(timestamp)
   }
-  let request_id = __header(raw?.headers ?? {}, "x-notion-request-id")
+  const request_id = __header(raw?.headers ?? {}, "x-notion-request-id")
   if request_id != nil && request_id != "" {
     return "notion:request:" + to_string(request_id)
   }
@@ -1671,20 +1671,20 @@ fn __parent_id(payload) {
 }
 
 fn __actor(payload) {
-  let actor = payload?.actor ?? payload?.user ?? payload?.performed_by ?? payload?.last_edited_by ?? {}
+  const actor = payload?.actor ?? payload?.user ?? payload?.performed_by ?? payload?.last_edited_by ?? {}
   return {id: actor?.id, name: actor?.name ?? actor?.person?.email ?? actor?.bot?.owner?.user?.name}
 }
 
 @complexity(allow)
 fn __triage_event(event_type, normalized_payload, raw_payload, dedupe_key) {
-  let task = __triage_task_metadata(raw_payload)
-  let source_kind = __triage_source_kind(event_type, normalized_payload, raw_payload, task)
-  let physical_kind = __triage_physical_kind(source_kind, normalized_payload, raw_payload)
-  let source_id = normalized_payload?.resource_id
-  let source_title = __triage_title(raw_payload, normalized_payload)
-  let source_ref = __notion_ref(physical_kind, source_id)
-  let source_url = __notion_source_url(physical_kind, source_id, raw_payload)
-  let provenance = __triage_provenance(raw_payload, normalized_payload, source_ref)
+  const task = __triage_task_metadata(raw_payload)
+  const source_kind = __triage_source_kind(event_type, normalized_payload, raw_payload, task)
+  const physical_kind = __triage_physical_kind(source_kind, normalized_payload, raw_payload)
+  const source_id = normalized_payload?.resource_id
+  const source_title = __triage_title(raw_payload, normalized_payload)
+  const source_ref = __notion_ref(physical_kind, source_id)
+  const source_url = __notion_source_url(physical_kind, source_id, raw_payload)
+  const provenance = __triage_provenance(raw_payload, normalized_payload, source_ref)
   return {
     schema: NOTION_TRIAGE_SCHEMA,
     provider: NOTION_PROVIDER_ID,
@@ -1721,14 +1721,14 @@ fn __triage_event(event_type, normalized_payload, raw_payload, dedupe_key) {
 }
 
 fn __triage_source_kind(event_type, normalized_payload, raw_payload, task) {
-  let lowered_event = lowercase(to_string(event_type))
+  const lowered_event = lowercase(to_string(event_type))
   if lowered_event.contains("comment") {
     return "comment"
   }
   if lowered_event.contains("mention") {
     return "mention"
   }
-  let entity_type = normalized_payload?.entity_type ?? raw_payload?.object ?? raw_payload?.entity?.type
+  const entity_type = normalized_payload?.entity_type ?? raw_payload?.object ?? raw_payload?.entity?.type
   if entity_type == "page" && task.has_task_metadata {
     return "task"
   }
@@ -1749,7 +1749,7 @@ fn __triage_physical_kind(source_kind, normalized_payload, raw_payload) {
 }
 
 fn __triage_change_kind(event_type) {
-  let lowered = lowercase(to_string(event_type))
+  const lowered = lowercase(to_string(event_type))
   if lowered.contains("created") {
     return "created"
   }
@@ -1773,22 +1773,22 @@ fn __triage_actors(actor) {
 }
 
 fn __triage_title(raw_payload, normalized_payload) {
-  let page = __page_payload(raw_payload)
-  let page_title = __notion_object_title(page)
+  const page = __page_payload(raw_payload)
+  const page_title = __notion_object_title(page)
   if page_title != nil && page_title != "" {
     return page_title
   }
-  let database = __database_payload(raw_payload)
-  let database_title = __notion_object_title(database)
+  const database = __database_payload(raw_payload)
+  const database_title = __notion_object_title(database)
   if database_title != nil && database_title != "" {
     return database_title
   }
-  let comment = __comment_payload(raw_payload)
-  let comment_text = __rich_text_plain(comment?.rich_text ?? comment?.text)
+  const comment = __comment_payload(raw_payload)
+  const comment_text = __rich_text_plain(comment?.rich_text ?? comment?.text)
   if comment_text != nil && comment_text != "" {
     return comment_text
   }
-  let entity_title = raw_payload?.entity?.title ?? raw_payload?.title ?? raw_payload?.name
+  const entity_title = raw_payload?.entity?.title ?? raw_payload?.title ?? raw_payload?.name
   if entity_title != nil && trim(to_string(entity_title)) != "" && type_of(entity_title) == "string" {
     return to_string(entity_title)
   }
@@ -1829,14 +1829,14 @@ fn __comment_payload(raw_payload) {
 }
 
 fn __notion_object_title(object) {
-  let from_properties = __title_from_properties(object?.properties ?? {})
+  const from_properties = __title_from_properties(object?.properties ?? {})
   if from_properties != nil && from_properties != "" {
     return from_properties
   }
   if object?.title != nil && type_of(object.title) == "string" {
     return object.title
   }
-  let rich_title = __rich_text_plain(object?.title)
+  const rich_title = __rich_text_plain(object?.title)
   if rich_title != nil && rich_title != "" {
     return rich_title
   }
@@ -1848,9 +1848,9 @@ fn __notion_object_title(object) {
 
 fn __title_from_properties(properties) {
   for entry in (properties ?? {}).entries() {
-    let property = entry.value
+    const property = entry.value
     if property?.type == "title" || property?.title != nil {
-      let title = __rich_text_plain(property?.title)
+      const title = __rich_text_plain(property?.title)
       if title != nil && title != "" {
         return title
       }
@@ -1866,11 +1866,11 @@ fn __rich_text_plain(value) {
   if type_of(value) == "string" {
     return value
   }
-  var text = ""
+  let text = ""
   for part in value ?? [] {
     text = text + to_string(part?.plain_text ?? part?.text?.content ?? part?.mention?.plain_text ?? "")
   }
-  let trimmed = trim(text)
+  const trimmed = trim(text)
   if trimmed == "" {
     return nil
   }
@@ -1879,17 +1879,17 @@ fn __rich_text_plain(value) {
 
 @complexity(allow)
 fn __triage_task_metadata(raw_payload) {
-  let page = __page_payload(raw_payload) ?? raw_payload
-  let properties = page?.properties ?? {}
-  var status = nil
-  var assignees = []
-  var due = nil
-  var dates = []
-  var fields = []
+  const page = __page_payload(raw_payload) ?? raw_payload
+  const properties = page?.properties ?? {}
+  let status = nil
+  let assignees = []
+  let due = nil
+  let dates = []
+  let fields = []
   for entry in properties.entries() {
-    let name = to_string(entry.key)
-    let property = entry.value
-    let property_type = property?.type
+    const name = to_string(entry.key)
+    const property = entry.value
+    const property_type = property?.type
     fields = fields + [{name: name, id: property?.id, type: property_type}]
     if status == nil && (property_type == "status" || property?.status != nil) {
       status = property?.status?.name ?? property?.status
@@ -1904,9 +1904,9 @@ fn __triage_task_metadata(raw_payload) {
       assignees = assignees + __people([property?.person])
     }
     if property_type == "date" || property?.date != nil {
-      let date_value = property?.date
+      const date_value = property?.date
       if date_value != nil {
-        let normalized_date = {name: name, start: date_value?.start, end: date_value?.end}
+        const normalized_date = {name: name, start: date_value?.start, end: date_value?.end}
         dates = dates + [normalized_date]
         if due == nil || lowercase(name).contains("due") {
           due = normalized_date
@@ -1932,7 +1932,7 @@ fn __triage_task_metadata(raw_payload) {
 }
 
 fn __people(values) {
-  var people = []
+  let people = []
   for person in values ?? [] {
     if person == nil {
       continue
@@ -1951,7 +1951,7 @@ fn __notion_ref(kind, id) {
 }
 
 fn __mime_type_from_name(name) {
-  let text = lowercase(to_string(name ?? ""))
+  const text = lowercase(to_string(name ?? ""))
   if text.ends_with(".pdf") {
     return "application/pdf"
   }
@@ -1990,18 +1990,18 @@ fn __artifact_media(args, default_mime_type) {
 }
 
 fn __notion_source_url(kind, id, raw_payload) {
-  let object = if kind == "page" {
+  const object = if kind == "page" {
     __page_payload(raw_payload)
   } else if kind == "database" || kind == "data_source" {
     __database_payload(raw_payload)
   } else {
     __comment_payload(raw_payload)
   }
-  let direct = object?.url ?? raw_payload?.url
+  const direct = object?.url ?? raw_payload?.url
   if direct != nil && trim(to_string(direct)) != "" {
     return to_string(direct)
   }
-  let fallback_id = if kind == "comment" {
+  const fallback_id = if kind == "comment" {
     raw_payload?.parent?.page_id ?? raw_payload?.comment?.parent?.page_id
       ?? raw_payload?.entity?.parent?.id
   } else {
@@ -2014,10 +2014,10 @@ fn __notion_source_url(kind, id, raw_payload) {
 }
 
 fn __triage_provenance(raw_payload, normalized_payload, source_ref) {
-  let page = __page_payload(raw_payload)
-  let database = __database_payload(raw_payload)
-  let comment = __comment_payload(raw_payload)
-  let page_id = page?.id
+  const page = __page_payload(raw_payload)
+  const database = __database_payload(raw_payload)
+  const comment = __comment_payload(raw_payload)
+  const page_id = page?.id
     ?? if normalized_payload?.entity_type == "page" {
     normalized_payload?.resource_id
   } else if raw_payload?.entity?.parent?.type == "page" {
@@ -2025,7 +2025,7 @@ fn __triage_provenance(raw_payload, normalized_payload, source_ref) {
   } else {
     nil
   }
-  let database_id = database?.id
+  const database_id = database?.id
     ?? if normalized_payload?.entity_type == "database" || normalized_payload?.entity_type == "data_source" {
     normalized_payload?.resource_id
   } else {
@@ -2078,7 +2078,7 @@ fn __database_schema(database) {
   if database?.properties == nil {
     return nil
   }
-  var fields = []
+  let fields = []
   for entry in database.properties.entries() {
     fields = fields + [{name: to_string(entry.key), id: entry.value?.id, type: entry.value?.type}]
   }
@@ -2086,7 +2086,7 @@ fn __database_schema(database) {
 }
 
 fn __triage_related_refs(source_ref, provenance) {
-  var refs = []
+  let refs = []
   refs = __append_ref(refs, source_ref)
   refs = __append_ref(refs, provenance?.page?.ref)
   refs = __append_ref(refs, provenance?.database?.ref)
@@ -2102,7 +2102,7 @@ fn __append_ref(refs, ref) {
 }
 
 fn __triage_summary(source_kind, event_type, title, source_id) {
-  let label = title ?? source_id ?? "untitled"
+  const label = title ?? source_id ?? "untitled"
   if source_kind == "task" {
     return "Notion task updated: " + to_string(label)
   }
@@ -2117,12 +2117,12 @@ fn __triage_summary(source_kind, event_type, title, source_id) {
 
 fn __triage_why(source_kind, task, provenance) {
   if source_kind == "task" {
-    let status = if task?.status == nil {
+    const status = if task?.status == nil {
       ""
     } else {
       " Status: " + to_string(task.status) + "."
     }
-    let due = if task?.due?.start == nil {
+    const due = if task?.due?.start == nil {
       ""
     } else {
       " Due: " + to_string(task.due.start) + "."
@@ -2154,7 +2154,7 @@ fn __triage_proposed_action(source_kind, task) {
 }
 
 fn __triage_urgency(task) {
-  let status = lowercase(to_string(task?.status ?? ""))
+  const status = lowercase(to_string(task?.status ?? ""))
   if status.contains("blocked") || status.contains("urgent") {
     return "high"
   }
@@ -2165,7 +2165,7 @@ fn __triage_urgency(task) {
 }
 
 fn __triage_priority(task) {
-  let urgency = __triage_urgency(task)
+  const urgency = __triage_urgency(task)
   if urgency == "high" {
     return 80
   }
@@ -2212,12 +2212,12 @@ fn __triage_action_intents(source_kind, source_id) {
 }
 
 fn __extract_host(url) {
-  let trimmed = trim(to_string(url ?? ""))
+  const trimmed = trim(to_string(url ?? ""))
   if trimmed == "" {
     return nil
   }
-  let lower = lowercase(trimmed)
-  var rest = nil
+  const lower = lowercase(trimmed)
+  let rest = nil
   if lower.starts_with("https://") {
     rest = trimmed[8:len(trimmed)]
   } else if lower.starts_with("http://") {
@@ -2225,19 +2225,19 @@ fn __extract_host(url) {
   } else {
     return nil
   }
-  let at_idx = rest.index_of("@")
+  const at_idx = rest.index_of("@")
   if at_idx != nil && at_idx >= 0 {
     rest = rest[at_idx + 1:len(rest)]
   }
-  var end = len(rest)
+  let end = len(rest)
   for ch in ["/", "?", "#"] {
-    let idx = rest.index_of(ch)
+    const idx = rest.index_of(ch)
     if idx != nil && idx >= 0 && idx < end {
       end = idx
     }
   }
-  var host = rest[0:end]
-  let colon_idx = host.index_of(":")
+  let host = rest[0:end]
+  const colon_idx = host.index_of(":")
   if colon_idx != nil && colon_idx >= 0 {
     host = host[0:colon_idx]
   }
@@ -2254,11 +2254,11 @@ fn __validate_api_base_url(api_base_url) {
   if api_base_url == nil {
     return Ok(NOTION_API_BASE_URL)
   }
-  let text = trim(to_string(api_base_url))
+  const text = trim(to_string(api_base_url))
   if text == "" || text == NOTION_API_BASE_URL {
     return Ok(NOTION_API_BASE_URL)
   }
-  let host = __extract_host(text)
+  const host = __extract_host(text)
   if host == nil {
     return Err({code: "invalid_api_base_url", message: "notion api_base_url must be an absolute http(s) URL"})
   }
@@ -2274,16 +2274,16 @@ fn __validate_api_base_url(api_base_url) {
 }
 
 fn __outbound_config(args) {
-  let raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
+  const raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
-  let api_base_check = __validate_api_base_url(raw_api_base_url)
+  const api_base_check = __validate_api_base_url(raw_api_base_url)
   if is_err(api_base_check) {
     return api_base_check
   }
-  let api_base_url = unwrap(api_base_check)
-  let notion_version = args?.notion_version ?? __state().ctx?.notion_version
+  const api_base_url = unwrap(api_base_check)
+  const notion_version = args?.notion_version ?? __state().ctx?.notion_version
     ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
-  let explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
+  const explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
   if explicit_api_token != nil && trim(to_string(explicit_api_token)) == "" {
     return Err(
       {
@@ -2293,7 +2293,7 @@ fn __outbound_config(args) {
       },
     )
   }
-  let api_token = __configured_secret(
+  const api_token = __configured_secret(
     explicit_api_token ?? __state().ctx?.api_token ?? __state().ctx?.secrets?.api_token,
     "api-token",
   )
@@ -2317,26 +2317,26 @@ fn __outbound_config(args) {
 }
 
 fn __oauth_config(args) {
-  let raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
+  const raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
-  let api_base_check = __validate_api_base_url(raw_api_base_url)
+  const api_base_check = __validate_api_base_url(raw_api_base_url)
   if is_err(api_base_check) {
     return api_base_check
   }
-  let api_base_url = unwrap(api_base_check)
-  let notion_version = args?.notion_version ?? __state().ctx?.notion_version
+  const api_base_url = unwrap(api_base_check)
+  const notion_version = args?.notion_version ?? __state().ctx?.notion_version
     ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
-  let client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
+  const client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
     ?? __state().ctx?.client_id
     ?? __state().ctx?.oauth?.client_id
     ?? __state().ctx?.secrets?.client_id
     ?? harness.env.get("NOTION_CLIENT_ID")
-  let explicit_client_secret = args?.client_secret ?? args?.oauth?.client_secret
+  const explicit_client_secret = args?.client_secret ?? args?.oauth?.client_secret
     ?? args?.secrets?.client_secret
     ?? __state().ctx?.client_secret
     ?? __state().ctx?.oauth?.client_secret
     ?? __state().ctx?.secrets?.client_secret
-  let client_secret = __configured_secret(explicit_client_secret, "client-secret")
+  const client_secret = __configured_secret(explicit_client_secret, "client-secret")
     ?? harness.env.get("NOTION_CLIENT_SECRET")
   if client_id == nil || trim(to_string(client_id)) == "" || client_secret == nil
     || trim(to_string(client_secret)) == "" {
@@ -2359,14 +2359,14 @@ fn __oauth_config(args) {
 }
 
 fn __oauth_call(method, args) {
-  let config = __oauth_config(args ?? {})
+  const config = __oauth_config(args ?? {})
   if is_err(config) {
     return config
   }
-  let cfg = unwrap(config)
+  const cfg = unwrap(config)
   if method == "oauth.token.create" {
-    let body = __oauth_call_body(args)
-    let variant = if body?._variant != nil {
+    const body = __oauth_call_body(args)
+    const variant = if body?._variant != nil {
       body
     } else if body?.refresh_token != nil {
       create_a_token_variant2(body.refresh_token)
@@ -2399,9 +2399,9 @@ fn __oauth_call(method, args) {
 }
 
 fn __call_body(args, remove_fields = []) {
-  let extra = remove_fields ?? []
-  let skip = NOTION_CONTROL_ARG_FIELDS + extra
-  var body = {}
+  const extra = remove_fields ?? []
+  const skip = NOTION_CONTROL_ARG_FIELDS + extra
+  let body = {}
   for entry in (args ?? {}).entries() {
     if !contains(skip, to_string(entry.key)) {
       body[entry.key] = entry.value
@@ -2411,9 +2411,9 @@ fn __call_body(args, remove_fields = []) {
 }
 
 fn __oauth_call_body(args) {
-  var body = {}
+  let body = {}
   for entry in (args ?? {}).entries() {
-    let key = to_string(entry.key)
+    const key = to_string(entry.key)
     if key == "token" || !contains(NOTION_CONTROL_ARG_FIELDS, key) {
       body[key] = entry.value
     }
@@ -2422,12 +2422,12 @@ fn __oauth_call_body(args) {
 }
 
 fn __requires_api_call_approval(method) {
-  let normalized = uppercase(to_string(method ?? "GET"))
+  const normalized = uppercase(to_string(method ?? "GET"))
   return normalized != "GET" && normalized != "HEAD" && normalized != "OPTIONS"
 }
 
 fn __required_id(args, field, method) {
-  let value = args.get(field) ?? args?.id
+  const value = args.get(field) ?? args?.id
   if value == nil || trim(to_string(value)) == "" {
     return __err("invalid_args", method + " requires " + field)
   }
@@ -2435,13 +2435,13 @@ fn __required_id(args, field, method) {
 }
 
 fn __notion_api_url(api_base_url, path) {
-  let base = trim(to_string(api_base_url))
-  let clean_base = if base.ends_with("/") {
+  const base = trim(to_string(api_base_url))
+  const clean_base = if base.ends_with("/") {
     base[0:len(base) - 1]
   } else {
     base
   }
-  let clean_path = if to_string(path).starts_with("/") {
+  const clean_path = if to_string(path).starts_with("/") {
     to_string(path)
   } else {
     "/" + to_string(path)
@@ -2458,7 +2458,7 @@ fn __notion_headers(cfg) {
 }
 
 fn __notion_request(method, url, body, cfg) {
-  let response = try {
+  const response = try {
     harness.net
       .request(
       method,
@@ -2476,24 +2476,24 @@ fn __notion_request(method, url, body, cfg) {
   if is_err(response) {
     return __err("transport", to_string(unwrap_err(response)))
   }
-  let http_response = unwrap(response)
-  let decoded = try {
+  const http_response = unwrap(response)
+  const decoded = try {
     json_parse(http_response.body ?? "{}")
   }
   if is_err(decoded) {
     return __err("invalid_response", "Notion API returned invalid JSON")
   }
-  let payload = unwrap(decoded)
+  const payload = unwrap(decoded)
   if http_response.status < 200 || http_response.status >= 300 {
-    let response_headers = http_response?.headers ?? {}
-    var err = {
+    const response_headers = http_response?.headers ?? {}
+    let err = {
       status: http_response.status,
       code: payload?.code ?? "notion_error",
       message: payload?.message
         ?? ("Notion API request failed with status " + to_string(http_response.status)),
       request_id: __response_request_id(response_headers),
     }
-    let auth_scope_failure = __auth_scope_failure(http_response.status, err.code)
+    const auth_scope_failure = __auth_scope_failure(http_response.status, err.code)
     if auth_scope_failure != nil {
       err.auth_scope_failure = auth_scope_failure
     }
@@ -2503,19 +2503,19 @@ fn __notion_request(method, url, body, cfg) {
 }
 
 fn __sdk_client(cfg) {
-  var client = new_client(__sdk_base_url(cfg.api_base_url), cfg.api_token)
+  let client = new_client(__sdk_base_url(cfg.api_base_url), cfg.api_token)
   client.extra_headers = {"Notion-Version": cfg.notion_version}
   return client
 }
 
 fn __oauth_client(cfg) {
-  var client = new_client(__sdk_base_url(cfg.api_base_url), "", cfg.client_id, cfg.client_secret)
+  let client = new_client(__sdk_base_url(cfg.api_base_url), "", cfg.client_id, cfg.client_secret)
   client.extra_headers = {"Notion-Version": cfg.notion_version}
   return client
 }
 
 fn __sdk_base_url(api_base_url) {
-  let base = trim(to_string(api_base_url))
+  const base = trim(to_string(api_base_url))
   if base.ends_with("/v1") {
     return base[0:len(base) - 3]
   }
@@ -2539,8 +2539,8 @@ fn __with_auth_scope_failure(result) {
   if !is_err(result) {
     return result
   }
-  var err = unwrap_err(result)
-  let auth_scope_failure = err?.auth_scope_failure ?? __auth_scope_failure(err?.status, err?.code)
+  let err = unwrap_err(result)
+  const auth_scope_failure = err?.auth_scope_failure ?? __auth_scope_failure(err?.status, err?.code)
   if auth_scope_failure != nil {
     err.auth_scope_failure = auth_scope_failure
   }
@@ -2554,66 +2554,66 @@ fn __response_request_id(headers) {
 
 fn __sdk_error(error) {
   if type_of(error) == "dict" {
-    let decoded = try {
+    const decoded = try {
       json_parse(error?.body ?? "{}")
     }
-    let payload = if is_ok(decoded) {
+    const payload = if is_ok(decoded) {
       unwrap(decoded)
     } else {
       {}
     }
-    let status = error?.status ?? 0
-    var err = {
+    const status = error?.status ?? 0
+    let err = {
       status: status,
       code: payload?.code ?? "notion_error",
       message: payload?.message ?? to_string(error),
       request_id: __response_request_id(error?.headers ?? {}),
     }
-    let auth_scope_failure = __auth_scope_failure(status, err.code)
+    const auth_scope_failure = __auth_scope_failure(status, err.code)
     if auth_scope_failure != nil {
       err.auth_scope_failure = auth_scope_failure
     }
     return Err(err)
   }
-  let text = to_string(error)
-  let marker = " HTTP "
-  let marker_index = text.index_of(marker)
+  const text = to_string(error)
+  const marker = " HTTP "
+  const marker_index = text.index_of(marker)
   if marker_index < 0 {
     return __err("notion_error", text)
   }
-  let detail = text[marker_index + len(marker):len(text)]
-  let space = detail.index_of(" ")
-  let status_text = if space < 0 {
+  const detail = text[marker_index + len(marker):len(text)]
+  const space = detail.index_of(" ")
+  const status_text = if space < 0 {
     detail
   } else {
     detail[0:space]
   }
-  let parsed_status = to_int(status_text)
-  let status = parsed_status ?? 0
-  let body_text = if space < 0 {
+  const parsed_status = to_int(status_text)
+  const status = parsed_status ?? 0
+  const body_text = if space < 0 {
     ""
   } else {
     detail[space + 1:len(detail)]
   }
-  let decoded = try {
+  const decoded = try {
     json_parse(body_text)
   }
   if is_ok(decoded) {
-    let payload = unwrap(decoded)
-    var err = {
+    const payload = unwrap(decoded)
+    let err = {
       status: status,
       code: payload?.code ?? "notion_error",
       message: payload?.message ?? text,
       request_id: nil,
     }
-    let auth_scope_failure = __auth_scope_failure(status, err.code)
+    const auth_scope_failure = __auth_scope_failure(status, err.code)
     if auth_scope_failure != nil {
       err.auth_scope_failure = auth_scope_failure
     }
     return Err(err)
   }
-  var err = {status: status, code: "notion_error", message: text, request_id: nil}
-  let auth_scope_failure = __auth_scope_failure(status, err.code)
+  let err = {status: status, code: "notion_error", message: text, request_id: nil}
+  const auth_scope_failure = __auth_scope_failure(status, err.code)
   if auth_scope_failure != nil {
     err.auth_scope_failure = auth_scope_failure
   }
@@ -2643,7 +2643,7 @@ fn __advance_cursor(cursor, high_water_mark, max_seen) {
   if max_seen == nil {
     return cursor
   }
-  var next = if cursor != nil && type_of(cursor) != "string" {
+  let next = if cursor != nil && type_of(cursor) != "string" {
     cursor
   } else {
     {}
@@ -2654,7 +2654,7 @@ fn __advance_cursor(cursor, high_water_mark, max_seen) {
 }
 
 fn __poll_max_batch_size(ctx, binding) {
-  let value = ctx?.max_batch_size ?? binding?.max_batch_size
+  const value = ctx?.max_batch_size ?? binding?.max_batch_size
   if value == nil {
     return nil
   }
@@ -2665,9 +2665,9 @@ fn __poll_max_batch_size(ctx, binding) {
 }
 
 fn __build_poll_event(binding, page, previous_snapshot) {
-  let event_type = "page.content_updated"
-  let last_edited_time = to_string(page.last_edited_time)
-  var payload = {
+  const event_type = "page.content_updated"
+  const last_edited_time = to_string(page.last_edited_time)
+  let payload = {
     provider: NOTION_PROVIDER_ID,
     event: event_type,
     event_type: event_type,
@@ -2695,7 +2695,7 @@ fn __build_poll_event(binding, page, previous_snapshot) {
       after: page,
     },
   }
-  let dedupe_key = __dedupe_key(event_type, payload.resource_id, {}, payload)
+  const dedupe_key = __dedupe_key(event_type, payload.resource_id, {}, payload)
   payload.triage = __triage_event(event_type, payload, page, dedupe_key)
   return {
     kind: event_type,
@@ -2708,9 +2708,9 @@ fn __build_poll_event(binding, page, previous_snapshot) {
 }
 
 fn __normalize_poll_binding(binding) {
-  let binding_id = binding?.binding_id ?? binding?.id ?? "poll"
-  let poll = binding?.poll ?? binding?.config?.poll ?? binding?.source ?? {}
-  let resource = poll?.resource ?? if poll?.database_id != nil {
+  const binding_id = binding?.binding_id ?? binding?.id ?? "poll"
+  const poll = binding?.poll ?? binding?.config?.poll ?? binding?.source ?? {}
+  const resource = poll?.resource ?? if poll?.database_id != nil {
     "database"
   } else {
     "data_source"
@@ -2722,7 +2722,7 @@ fn __normalize_poll_binding(binding) {
         + "`; expected data_source or database",
     )
   }
-  let resource_id = if resource == "data_source" {
+  const resource_id = if resource == "data_source" {
     poll?.data_source_id ?? poll?.database_id
   } else {
     poll?.database_id ?? poll?.data_source_id
@@ -2730,7 +2730,7 @@ fn __normalize_poll_binding(binding) {
   if resource_id == nil || resource_id == "" {
     return __err("activation", "notion poll binding `" + binding_id + "` requires a " + resource + " id")
   }
-  let page_size = poll?.page_size ?? 100
+  const page_size = poll?.page_size ?? 100
   return Ok(
     binding
       + {
@@ -2763,7 +2763,7 @@ fn __normalize_poll_binding(binding) {
 
 @complexity(allow)
 fn __query_pages_since(binding, high_water) {
-  var filters = []
+  let filters = []
   if binding?.filter != nil {
     filters = filters + [binding.filter]
   }
@@ -2771,19 +2771,19 @@ fn __query_pages_since(binding, high_water) {
     filters = filters
       + [{timestamp: binding.high_water_mark, [binding.high_water_mark]: {after: high_water}}]
   }
-  let filter = if len(filters) == 0 {
+  const filter = if len(filters) == 0 {
     nil
   } else if len(filters) == 1 {
     filters[0]
   } else {
     {and: filters}
   }
-  let sorts = if len(binding?.sorts ?? []) == 0 {
+  const sorts = if len(binding?.sorts ?? []) == 0 {
     [{timestamp: binding.high_water_mark, direction: "ascending"}]
   } else {
     binding.sorts
   }
-  var args = {
+  let args = {
     api_base_url: binding?.api_base_url,
     api_token: binding?.api_token,
     notion_version: binding?.notion_version,
@@ -2793,7 +2793,7 @@ fn __query_pages_since(binding, high_water) {
   if filter != nil {
     args.filter = filter
   }
-  let response = if binding.resource == "data_source" {
+  const response = if binding.resource == "data_source" {
     call("data_sources.query", args + {data_source_id: binding.resource_id})
   } else {
     call("databases.query", args + {database_id: binding.resource_id})
