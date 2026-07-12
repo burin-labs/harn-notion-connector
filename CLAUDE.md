@@ -9,7 +9,7 @@ Shared Harn connector authoring rules live in the canonical guide:
 Keep this file limited to Notion-specific notes and local hazards. Put shared
 connector guidance in the Harn guide first.
 
-## Provider Notes
+## Provider notes
 
 - Outbound REST endpoint definitions belong in `notion-sdk-harn`; this
   connector wraps that SDK and should not duplicate its generated API surface.
