@@ -56,7 +56,15 @@ import {
 
 const NOTION_PROVIDER_ID = "notion"
 
-let NOTION_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
+type NotionConnectorState = {
+  initialized: bool,
+  active: bool,
+  ctx: dict,
+  webhook_bindings: dict,
+  poll_bindings: dict,
+}
+
+let NOTION_STATE: NotionConnectorState = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 
 const NOTION_API_BASE_URL = "https://api.notion.com/v1"
 
@@ -269,7 +277,15 @@ pub fn method_capabilities() {
 
 /** Initialize connector state with orchestrator context. */
 pub fn init(ctx = nil) {
-  const next = __default_state() + {initialized: true, ctx: ctx ?? {}}
+  const next = __default_state()
+    + {
+    initialized: true,
+    ctx: if type_of(ctx) == "dict" {
+      ctx
+    } else {
+      {}
+    },
+  }
   __set_state(next)
   return next
 }
@@ -1255,15 +1271,15 @@ pub fn poll_tick(ctx = nil) {
   }
 }
 
-fn __default_state() {
+fn __default_state() -> NotionConnectorState {
   return {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 }
 
-fn __state() {
+fn __state() -> NotionConnectorState {
   return NOTION_STATE
 }
 
-fn __set_state(state) {
+fn __set_state(state: NotionConnectorState) {
   NOTION_STATE = state
   return state
 }
