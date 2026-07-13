@@ -4,9 +4,12 @@ import { expect, expect_eq } from "./assertions"
 pipeline default() {
   egress_policy({allow: ["api.notion.com"], default: "deny"})
   shutdown()
-  init(
+  const normalized = init("invalid-context")
+  expect_eq(normalized.ctx, {}, "non-dict init context is normalized")
+  const initialized = init(
     {api_token: "secret_api", api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"},
   )
+  expect_eq(initialized.ctx.api_token, "secret_api", "dict init context is retained")
   http_mock_clear()
   const base = "https://api.notion.com/v1"
   http_mock(
