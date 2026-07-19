@@ -5,7 +5,11 @@ pipeline default() {
   egress_policy({allow: ["api.notion.com"], default: "deny"})
   shutdown()
   init(
-    {api_token: "secret_api", api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"},
+    {
+      api_token: "secret_api",
+      api_base_url: "https://api.notion.com/v1",
+      notion_version: "2026-03-11",
+    },
   )
   http_mock_clear()
   const base = "https://api.notion.com/v1"
@@ -17,20 +21,35 @@ pipeline default() {
         {status: 200, body: "{\"object\":\"data_source\",\"id\":\"ds_123\"}", headers: {}},
         {
           status: 200,
-          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
+          body:
+            "{\"object\":\"view_query\",\"id\":\"query_123\",\"view_id\":\"view_123\",\"results\":[],\"has_more\":false}",
           headers: {},
         },
-        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}", headers: {}},
         {
           status: 200,
-          body: "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
+          body: "{\"object\":\"view\",\"id\":\"view_123\",\"type\":\"table\"}",
           headers: {},
         },
-        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_created\",\"type\":\"table\"}", headers: {}},
-        {status: 200, body: "{\"object\":\"view\",\"id\":\"view_123\",\"name\":\"Renamed\"}", headers: {}},
         {
           status: 200,
-          body: "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
+          body:
+            "{\"object\":\"list\",\"results\":[{\"object\":\"view\",\"id\":\"view_123\"}],\"has_more\":false}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"view\",\"id\":\"view_created\",\"type\":\"table\"}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"object\":\"view\",\"id\":\"view_123\",\"name\":\"Renamed\"}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body:
+            "{\"object\":\"view_query\",\"id\":\"query_123\",\"results\":[{\"object\":\"page\",\"id\":\"page_123\"}],\"has_more\":false}",
           headers: {},
         },
         {
@@ -40,7 +59,8 @@ pipeline default() {
         },
         {
           status: 200,
-          body: "{\"access_token\":\"secret_access\",\"bot_id\":\"bot_123\",\"owner\":{},\"token_type\":\"bearer\",\"workspace_id\":\"ws_test\"}",
+          body:
+            "{\"access_token\":\"secret_access\",\"bot_id\":\"bot_123\",\"owner\":{},\"token_type\":\"bearer\",\"workspace_id\":\"ws_test\"}",
           headers: {},
         },
         {status: 200, body: "{\"active\":true,\"request_id\":\"req_introspect\"}", headers: {}},
@@ -58,11 +78,17 @@ pipeline default() {
   expect_eq(view.object, "view", "retrieve view object")
   const views = call("views.list", {data_source_id: "ds_123"})
   expect_eq(views.results[0].id, "view_123", "list views result")
-  const created_view = call("views.create", {data_source_id: "ds_123", name: "Task table", type: "table"})
+  const created_view = call(
+    "views.create",
+    {data_source_id: "ds_123", name: "Task table", type: "table"},
+  )
   expect_eq(created_view.id, "view_created", "create view result")
   const updated_view = call("views.update", {view_id: "view_123", name: "Renamed"})
   expect_eq(updated_view.name, "Renamed", "update view result")
-  const results = call("views.queries.results", {view_id: "view_123", query_id: "query_123", page_size: 50})
+  const results = call(
+    "views.queries.results",
+    {view_id: "view_123", query_id: "query_123", page_size: 50},
+  )
   expect_eq(results.results[0].id, "page_123", "view query results")
   const deleted = call("views.queries.delete", {view_id: "view_123", query_id: "query_123"})
   expect_eq(deleted.deleted, true, "delete view query")
@@ -108,7 +134,11 @@ pipeline default() {
   expect_eq(token_body.get("client_secret"), nil, "OAuth client secret is not leaked into body")
   expect_eq(calls[8].headers.get("authorization"), "[redacted]", "OAuth basic auth is redacted")
   const introspect_body = json_parse(calls[9].body)
-  expect_eq(introspect_body.get("token"), "secret_access", "OAuth introspect body keeps target token")
+  expect_eq(
+    introspect_body.get("token"),
+    "secret_access",
+    "OAuth introspect body keeps target token",
+  )
   const revoke_body = json_parse(calls[10].body)
   expect_eq(revoke_body.get("token"), "secret_access", "OAuth revoke body keeps target token")
   http_mock_clear()

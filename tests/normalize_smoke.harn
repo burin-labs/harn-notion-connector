@@ -83,10 +83,16 @@ pipeline default() {
     "reject",
     "non-verification payloads still require signatures",
   )
-  const missing_signature = normalize_inbound({verification_token: secret, body_text: event_body, headers: {}})
+  const missing_signature = normalize_inbound(
+    {verification_token: secret, body_text: event_body, headers: {}},
+  )
   expect_eq(missing_signature.type, "reject", "missing signature rejects")
   const wrong_length = normalize_inbound(
-    {verification_token: secret, body_text: event_body, headers: {"x-notion-signature": "sha256=abc"}},
+    {
+      verification_token: secret,
+      body_text: event_body,
+      headers: {"x-notion-signature": "sha256=abc"},
+    },
   )
   expect_eq(wrong_length.type, "reject", "wrong length signature rejects")
   const wrong_secret = normalize_inbound(
@@ -98,7 +104,9 @@ pipeline default() {
   )
   expect_eq(wrong_secret.type, "reject", "wrong secret rejects")
   shutdown()
-  const missing_secret = normalize_inbound({body_text: event_body, headers: notion_headers(secret, event_body)})
+  const missing_secret = normalize_inbound(
+    {body_text: event_body, headers: notion_headers(secret, event_body)},
+  )
   expect_eq(missing_secret.type, "reject", "missing secret rejects")
   const source = harness.fs.read_text(source_dir() + "/../src/lib.harn")
   expect(
@@ -138,7 +146,9 @@ pipeline default() {
   expect_eq(oversized_result.type, "reject", "F5: oversized verification_token rejects")
   // F5: generic signed events must NOT carry verification_token through.
   const fresh = fixture_body_fresh("page_content_updated")
-  const signed_with_token_body = json_stringify(json_parse(fresh) + {verification_token: "should-not-surface"})
+  const signed_with_token_body = json_stringify(
+    json_parse(fresh) + {verification_token: "should-not-surface"},
+  )
   const signed_with_token = normalize_inbound(
     {
       verification_token: secret,
@@ -162,7 +172,11 @@ pipeline default() {
     },
   )
   const stale = normalize_inbound(
-    {verification_token: secret, body_text: stale_body, headers: notion_headers(secret, stale_body)},
+    {
+      verification_token: secret,
+      body_text: stale_body,
+      headers: notion_headers(secret, stale_body),
+    },
   )
   expect_eq(stale.type, "reject", "F6: stale payload.timestamp rejects")
   shutdown()

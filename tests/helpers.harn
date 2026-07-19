@@ -29,7 +29,8 @@ pub fn refresh_body_timestamp(body) {
 pub fn signed_raw(secret, body, extra = nil) {
   const fresh = refresh_body_timestamp(body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
-    + (extra ?? {})
+    + (extra
+    ?? {})
 }
 
 /** Read a recorded webhook fixture body by basename. */
@@ -70,7 +71,11 @@ pub fn assert_notion_interface() {
       {
         id: "notion.poll",
         kind: "poll",
-        poll: {resource: "data_source", data_source_id: "ds_123", high_water_mark: "last_edited_time"},
+        poll: {
+          resource: "data_source",
+          data_source_id: "ds_123",
+          high_water_mark: "last_edited_time",
+        },
         api_token: "secret_api",
       },
     ],

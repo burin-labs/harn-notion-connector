@@ -40,7 +40,9 @@ fn page(id, edited_at, parent_id = "ds_123") {
 }
 
 fn list_body(results, has_more = false, next_cursor = nil) {
-  return json_stringify({object: "list", results: results, has_more: has_more, next_cursor: next_cursor})
+  return json_stringify(
+    {object: "list", results: results, has_more: has_more, next_cursor: next_cursor},
+  )
 }
 
 pipeline default() {
@@ -79,7 +81,10 @@ pipeline default() {
     "poll dedupe key matches normalized event identity",
   )
   expect_eq(first.cursor.last_edited_time, "2026-04-19T10:00:00Z", "first tick advances cursor")
-  expect(first.state.poll_cache.get("notion.poll:page_1") != nil, "first tick persists page snapshot")
+  expect(
+    first.state.poll_cache.get("notion.poll:page_1") != nil,
+    "first tick persists page snapshot",
+  )
   const second = poll_tick(poll_ctx(first.cursor, first.state))
   expect_eq(len(second.events), 1, "second tick emits only changed/new pages")
   expect_eq(second.events[0].payload.resource_id, "page_2", "second tick new page id")
@@ -127,12 +132,16 @@ pipeline default() {
       responses: [
         {
           status: 200,
-          body: list_body([page("page_a", "2026-04-19T10:20:00Z"), page("page_b", "2026-04-19T10:25:00Z")]),
+          body: list_body(
+            [page("page_a", "2026-04-19T10:20:00Z"), page("page_b", "2026-04-19T10:25:00Z")],
+          ),
           headers: {},
         },
         {
           status: 200,
-          body: list_body([page("page_a", "2026-04-19T10:20:00Z"), page("page_b", "2026-04-19T10:25:00Z")]),
+          body: list_body(
+            [page("page_a", "2026-04-19T10:20:00Z"), page("page_b", "2026-04-19T10:25:00Z")],
+          ),
           headers: {},
         },
       ],
