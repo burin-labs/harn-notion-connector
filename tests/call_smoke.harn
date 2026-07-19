@@ -7,7 +7,11 @@ pipeline default() {
   const normalized = init("invalid-context")
   expect_eq(normalized.ctx, {}, "non-dict init context is normalized")
   const initialized = init(
-    {api_token: "secret_api", api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"},
+    {
+      api_token: "secret_api",
+      api_base_url: "https://api.notion.com/v1",
+      notion_version: "2026-03-11",
+    },
   )
   expect_eq(initialized.ctx.api_token, "secret_api", "dict init context is retained")
   http_mock_clear()
@@ -94,15 +98,23 @@ pipeline default() {
   const unsupported = call("workspaces.retrieve", {workspace_id: "workspace_1"})
   expect(is_err(unsupported), "unsupported method rejected")
   expect_eq(unwrap_err(unsupported).code, "method_not_found", "unsupported method code")
-  const unapproved_api_call = call("api_call", {request_method: "POST", path: "/pages", body: {parent: {page_id: "page_123"}}})
+  const unapproved_api_call = call(
+    "api_call",
+    {request_method: "POST", path: "/pages", body: {parent: {page_id: "page_123"}}},
+  )
   expect(is_err(unapproved_api_call), "write-like api_call requires approval")
   expect_eq(unwrap_err(unapproved_api_call).code, "approval_required", "api_call approval code")
-  const page_export = artifact_export_request({page_id: "page_123", format: "page", name: "report.json"})
+  const page_export = artifact_export_request(
+    {page_id: "page_123", format: "page", name: "report.json"},
+  )
   expect_eq(page_export.kind, "artifact_export", "page export descriptor kind")
   expect_eq(page_export.method, "GET", "page export method")
   expect_eq(page_export.url, base + "/pages/page_123", "page export URL")
   expect_eq(page_export.artifact.mime_type, "application/json", "page export mime")
-  const block_export = call("artifact.export_request", {page_id: "page_123", format: "blocks", page_size: 25})
+  const block_export = call(
+    "artifact.export_request",
+    {page_id: "page_123", format: "blocks", page_size: 25},
+  )
   expect_eq(block_export.url, base + "/blocks/page_123/children", "block export URL")
   expect_eq(block_export.query.page_size, 25, "block export page size")
   const file_export = artifact_export_request(
@@ -171,7 +183,10 @@ pipeline default() {
   )
   expect(is_err(bad_host), "F8: disallowed api_base_url rejected")
   expect_eq(unwrap_err(bad_host).code, "disallowed_api_base_url", "F8: disallowed host code")
-  const bad_url = call("pages.retrieve", {page_id: "page_123", api_token: "secret_api", api_base_url: "not-a-url"})
+  const bad_url = call(
+    "pages.retrieve",
+    {page_id: "page_123", api_token: "secret_api", api_base_url: "not-a-url"},
+  )
   expect(is_err(bad_url), "F8: malformed api_base_url rejected")
   expect_eq(unwrap_err(bad_url).code, "invalid_api_base_url", "F8: malformed url code")
   http_mock_clear()
