@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-07-06
 
 - Added deterministic artifact helper descriptors:
   `artifact.export_request` supports Notion page metadata, block-tree, markdown,
