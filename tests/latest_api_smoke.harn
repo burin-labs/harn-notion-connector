@@ -1,19 +1,20 @@
 import { call, init, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 
-pipeline default() {
-  egress_policy({allow: ["api.notion.com"], default: "deny"})
-  shutdown()
+pipeline default(harness: Harness) {
+  harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
+  shutdown(harness)
   init(
+    harness,
     {
       api_token: "secret_api",
       api_base_url: "https://api.notion.com/v1",
       notion_version: "2026-03-11",
     },
   )
-  http_mock_clear()
+  harness.testing.http_mock_clear()
   const base = "https://api.notion.com/v1"
-  http_mock(
+  harness.testing.http_mock(
     "*",
     base + "/*",
     {
@@ -68,46 +69,55 @@ pipeline default() {
       ],
     },
   )
-  const data_source = call("data_sources.retrieve", {data_source_id: "ds_123"})
+  const data_source = call(harness, "data_sources.retrieve", {data_source_id: "ds_123"})
   expect_eq(data_source.object, "data_source", "retrieve data source object")
   expect_eq(data_source.id, "ds_123", "retrieve data source id")
-  const view_query = call("views.queries.create", {view_id: "view_123", page_size: 50})
+  const view_query = call(harness, "views.queries.create", {view_id: "view_123", page_size: 50})
   expect_eq(view_query.object, "view_query", "create view query object")
   expect_eq(view_query.id, "query_123", "create view query id")
-  const view = call("views.retrieve", {view_id: "view_123"})
+  const view = call(harness, "views.retrieve", {view_id: "view_123"})
   expect_eq(view.object, "view", "retrieve view object")
-  const views = call("views.list", {data_source_id: "ds_123"})
+  const views = call(harness, "views.list", {data_source_id: "ds_123"})
   expect_eq(views.results[0].id, "view_123", "list views result")
   const created_view = call(
+    harness,
     "views.create",
     {data_source_id: "ds_123", name: "Task table", type: "table"},
   )
   expect_eq(created_view.id, "view_created", "create view result")
-  const updated_view = call("views.update", {view_id: "view_123", name: "Renamed"})
+  const updated_view = call(harness, "views.update", {view_id: "view_123", name: "Renamed"})
   expect_eq(updated_view.name, "Renamed", "update view result")
   const results = call(
+    harness,
     "views.queries.results",
     {view_id: "view_123", query_id: "query_123", page_size: 50},
   )
   expect_eq(results.results[0].id, "page_123", "view query results")
-  const deleted = call("views.queries.delete", {view_id: "view_123", query_id: "query_123"})
+  const deleted = call(
+    harness,
+    "views.queries.delete",
+    {view_id: "view_123", query_id: "query_123"},
+  )
   expect_eq(deleted.deleted, true, "delete view query")
   const token = call(
+    harness,
     "oauth.token.create",
     {client_id: "client_123", client_secret: "secret_client", code: "code_123"},
   )
   expect_eq(token.access_token, "secret_access", "OAuth token create response")
   const introspected = call(
+    harness,
     "oauth.token.introspect",
     {client_id: "client_123", client_secret: "secret_client", token: "secret_access"},
   )
   expect_eq(introspected.active, true, "OAuth token introspect response")
   const revoked = call(
+    harness,
     "oauth.token.revoke",
     {client_id: "client_123", client_secret: "secret_client", token: "secret_access"},
   )
   expect_eq(revoked.request_id, "req_revoke", "OAuth token revoke response")
-  const calls = http_mock_calls()
+  const calls = harness.testing.http_mock_calls()
   expect_eq(calls[0].url, base + "/data_sources/ds_123", "retrieve data source URL")
   expect_eq(calls[0].headers.get("notion-version"), "2026-03-11", "latest Notion version header")
   expect_eq(calls[1].url, base + "/views/view_123/queries", "create view query URL")
@@ -141,6 +151,6 @@ pipeline default() {
   )
   const revoke_body = json_parse(calls[10].body)
   expect_eq(revoke_body.get("token"), "secret_access", "OAuth revoke body keeps target token")
-  http_mock_clear()
-  shutdown()
+  harness.testing.http_mock_clear()
+  shutdown(harness)
 }

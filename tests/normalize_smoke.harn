@@ -8,10 +8,13 @@ import {
   notion_headers,
 } from "./helpers"
 
-pipeline default() {
+pipeline default(harness: Harness) {
   const secret = "test-verification-token"
-  assert_notion_interface()
-  const page = normalize_inbound(fixture_raw("page_content_updated", secret))
+  assert_notion_interface(harness)
+  const page = normalize_inbound(
+    harness,
+    fixture_raw({clock: harness.clock, fs: harness.fs}, "page_content_updated", secret),
+  )
   expect_eq(page.type, "event", "page envelope type")
   expect_eq(page.event.kind, "page.content_updated", "page event kind")
   expect_eq(page.event.signature_status.state, "verified", "page signed")
@@ -31,8 +34,12 @@ pipeline default() {
   // the exact value.
   expect(page.event.payload.occurred_at != nil, "page occurred_at populated")
   expect(page.event.dedupe_key != "" && page.event.dedupe_key != nil, "page dedupe key populated")
-  const fresh_body = fixture_body_fresh("page_content_updated")
+  const fresh_body = fixture_body_fresh(
+    {clock: harness.clock, fs: harness.fs},
+    "page_content_updated",
+  )
   const raw_body = normalize_inbound(
+    harness,
     {
       verification_token: secret,
       raw_body: bytes_from_string(fresh_body),
@@ -41,22 +48,29 @@ pipeline default() {
   )
   expect_eq(raw_body.type, "event", "raw_body envelope type")
   expect_eq(raw_body.event.kind, "page.content_updated", "raw_body event kind")
-  const database = normalize_inbound(fixture_raw("database_created", secret))
+  const database = normalize_inbound(
+    harness,
+    fixture_raw({clock: harness.clock, fs: harness.fs}, "database_created", secret),
+  )
   expect_eq(database.event.kind, "database.created", "database event kind")
   expect_eq(database.event.payload.event, "database.created", "database provider payload event")
   expect_eq(database.event.payload.entity_id, "database_projects", "database entity id")
   expect_eq(database.event.payload.entity_type, "database", "database entity type")
   expect_eq(database.event.payload.resource_id, "database_projects", "database resource id")
   expect_eq(database.event.payload.parent_id, "page_home", "database parent id")
-  const comment = normalize_inbound(fixture_raw("comment_created", secret))
+  const comment = normalize_inbound(
+    harness,
+    fixture_raw({clock: harness.clock, fs: harness.fs}, "comment_created", secret),
+  )
   expect_eq(comment.event.kind, "comment.created", "comment event kind")
   expect_eq(comment.event.payload.event, "comment.created", "comment provider payload event")
   expect_eq(comment.event.payload.entity_id, "comment_delta", "comment entity id")
   expect_eq(comment.event.payload.entity_type, "comment", "comment entity type")
   expect_eq(comment.event.payload.resource_id, "comment_delta", "comment resource id")
   expect_eq(comment.event.payload.parent_id, "page_alpha", "comment parent id")
-  const event_body = fixture_body("page_content_updated")
+  const event_body = fixture_body(harness.fs, "page_content_updated")
   const tampered = normalize_inbound(
+    harness,
     {
       verification_token: secret,
       body_text: event_body + " ",
@@ -66,6 +80,7 @@ pipeline default() {
   expect_eq(tampered.type, "reject", "tampered body rejects")
   expect_eq(tampered.reject.status, 401, "tampered body status")
   const unsigned_non_verification = normalize_inbound(
+    harness,
     {
       body_text: json_stringify(
         {
@@ -84,10 +99,12 @@ pipeline default() {
     "non-verification payloads still require signatures",
   )
   const missing_signature = normalize_inbound(
+    harness,
     {verification_token: secret, body_text: event_body, headers: {}},
   )
   expect_eq(missing_signature.type, "reject", "missing signature rejects")
   const wrong_length = normalize_inbound(
+    harness,
     {
       verification_token: secret,
       body_text: event_body,
@@ -96,6 +113,7 @@ pipeline default() {
   )
   expect_eq(wrong_length.type, "reject", "wrong length signature rejects")
   const wrong_secret = normalize_inbound(
+    harness,
     {
       verification_token: "wrong-secret",
       body_text: event_body,
@@ -103,12 +121,13 @@ pipeline default() {
     },
   )
   expect_eq(wrong_secret.type, "reject", "wrong secret rejects")
-  shutdown()
+  shutdown(harness)
   const missing_secret = normalize_inbound(
+    harness,
     {body_text: event_body, headers: notion_headers(secret, event_body)},
   )
   expect_eq(missing_secret.type, "reject", "missing secret rejects")
-  const source = harness.fs.read_text(source_dir() + "/../src/lib.harn")
+  const source = harness.fs.read_text(harness.fs.source_dir() + "/../src/lib.harn")
   expect(
     source.contains("constant_time_eq(expected, provided)"),
     "signature comparison uses constant_time_eq",
@@ -119,7 +138,7 @@ pipeline default() {
   const verification_body = json_stringify(
     {verification_token: "verify-token", type: "subscription.verification", id: "verification_1"},
   )
-  const verification = normalize_inbound({body_text: verification_body, headers: {}})
+  const verification = normalize_inbound(harness, {body_text: verification_body, headers: {}})
   expect_eq(verification.type, "event", "F5: verification emits an event")
   expect_eq(
     verification.event.kind,
@@ -142,14 +161,15 @@ pipeline default() {
   const oversized_body = json_stringify(
     {verification_token: oversized, type: "subscription.verification", id: "verification_long"},
   )
-  const oversized_result = normalize_inbound({body_text: oversized_body, headers: {}})
+  const oversized_result = normalize_inbound(harness, {body_text: oversized_body, headers: {}})
   expect_eq(oversized_result.type, "reject", "F5: oversized verification_token rejects")
   // F5: generic signed events must NOT carry verification_token through.
-  const fresh = fixture_body_fresh("page_content_updated")
+  const fresh = fixture_body_fresh({clock: harness.clock, fs: harness.fs}, "page_content_updated")
   const signed_with_token_body = json_stringify(
     json_parse(fresh) + {verification_token: "should-not-surface"},
   )
   const signed_with_token = normalize_inbound(
+    harness,
     {
       verification_token: secret,
       body_text: signed_with_token_body,
@@ -172,6 +192,7 @@ pipeline default() {
     },
   )
   const stale = normalize_inbound(
+    harness,
     {
       verification_token: secret,
       body_text: stale_body,
@@ -179,5 +200,5 @@ pipeline default() {
     },
   )
   expect_eq(stale.type, "reject", "F6: stale payload.timestamp rejects")
-  shutdown()
+  shutdown(harness)
 }

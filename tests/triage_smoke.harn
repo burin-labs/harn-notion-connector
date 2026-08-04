@@ -50,10 +50,13 @@ fn task_page() {
   }
 }
 
-pipeline default() {
-  egress_policy({allow: ["api.notion.com"], default: "deny"})
+pipeline default(harness: Harness) {
+  harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
   const secret = "test-verification-token"
-  const webhook = normalize_inbound(fixture_raw("page_task_updated", secret))
+  const webhook = normalize_inbound(
+    harness,
+    fixture_raw({clock: harness.clock, fs: harness.fs}, "page_task_updated", secret),
+  )
   expect_eq(webhook.type, "event", "webhook triage fixture emits event")
   const triage = webhook.event.payload.triage
   expect_eq(triage.schema, "harn.triage_event.v1", "triage schema marker")
@@ -89,7 +92,10 @@ pipeline default() {
   expect_eq(triage.action_intents[2].requires_approval, true, "write-like intent requires approval")
   expect_eq(triage.action_intents[3].method, "comments.create", "follow-up write method explicit")
   expect_eq(triage.action_intents[3].requires_approval, true, "follow-up write requires approval")
-  const database = normalize_inbound(fixture_raw("database_created", secret))
+  const database = normalize_inbound(
+    harness,
+    fixture_raw({clock: harness.clock, fs: harness.fs}, "database_created", secret),
+  )
   expect_eq(database.event.payload.triage.source.kind, "database", "database source kind")
   expect_eq(
     database.event.payload.triage.source.ref,
@@ -106,7 +112,10 @@ pipeline default() {
     "page_home",
     "database parent page provenance",
   )
-  const comment = normalize_inbound(fixture_raw("comment_created", secret))
+  const comment = normalize_inbound(
+    harness,
+    fixture_raw({clock: harness.clock, fs: harness.fs}, "comment_created", secret),
+  )
   expect_eq(comment.event.payload.triage.source.kind, "comment", "comment source kind")
   expect_eq(
     comment.event.payload.triage.source.ref,
@@ -149,10 +158,10 @@ pipeline default() {
     true,
     "OAuth token revocation requires approval",
   )
-  shutdown()
-  init({api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"})
-  http_mock_clear()
-  http_mock(
+  shutdown(harness)
+  init(harness, {api_base_url: "https://api.notion.com/v1", notion_version: "2026-03-11"})
+  harness.testing.http_mock_clear()
+  harness.testing.http_mock(
     "POST",
     "https://api.notion.com/v1/data_sources/database_tasks/query",
     {
@@ -161,7 +170,7 @@ pipeline default() {
       headers: {},
     },
   )
-  const polled = poll_tick(poll_ctx())
+  const polled = poll_tick(harness, poll_ctx())
   expect_eq(len(polled.events), 1, "poll fixture emits one event")
   expect_eq(polled.events[0].payload.triage.source.kind, "task", "poll triage task kind")
   expect_eq(
@@ -171,8 +180,8 @@ pipeline default() {
   )
   expect_eq(polled.events[0].payload.triage.task.status, "In progress", "poll triage status")
   expect_eq(polled.events[0].payload.triage.task.due.start, "2026-04-22", "poll triage due date")
-  http_mock_clear()
-  http_mock(
+  harness.testing.http_mock_clear()
+  harness.testing.http_mock(
     "GET",
     "https://api.notion.com/v1/pages/no_access",
     {
@@ -183,6 +192,7 @@ pipeline default() {
     },
   )
   const forbidden = call(
+    harness,
     "api_call",
     {request_method: "GET", path: "/pages/no_access", api_token: "secret_api"},
   )
@@ -193,6 +203,6 @@ pipeline default() {
   expect_eq(err.auth_scope_failure.provider, "notion", "auth/scope provider marker")
   expect_eq(err.auth_scope_failure.kind, "missing_scopes_or_resource_access", "auth/scope kind")
   expect_eq(err.request_id, "req_forbidden", "request id preserved for support")
-  http_mock_clear()
-  shutdown()
+  harness.testing.http_mock_clear()
+  shutdown(harness)
 }
