@@ -425,12 +425,12 @@ const NOTION_VERIFICATION_TOKEN_MAX_LEN = 512
  */
 const NOTION_REPLAY_WINDOW_SECONDS = 300
 
-fn __notion_freshness_check(harness: HarnessClock, payload) {
+fn __notion_freshness_check(clock: HarnessClock, payload) {
   const raw_ts = payload?.timestamp
   if raw_ts == nil {
     return Ok(true)
   }
-  const now = harness.now().timestamp
+  const now = clock.now().timestamp
   let event_seconds = nil
   const kind = type_of(raw_ts)
   if kind == "int" || kind == "float" {
@@ -1472,53 +1472,53 @@ fn __binding_for_raw(raw) {
   return nil
 }
 
-fn __signing_secret(harness: HarnessSecrets, raw) {
-  const direct = __configured_secret(harness, raw?.verification_token, "verification_token")
+fn __signing_secret(secrets: HarnessSecrets, raw) {
+  const direct = __configured_secret(secrets, raw?.verification_token, "verification_token")
     ?? __configured_secret(
-    harness,
+    secrets,
     raw?.signing_secret,
     "signing_secret",
   )
-    ?? __configured_secret(harness, raw?.secret, "secret")
+    ?? __configured_secret(secrets, raw?.secret, "secret")
   if direct != nil && trim(to_string(direct)) != "" {
     return direct
   }
-  const metadata_alias = __secret_alias(harness, raw, "verification_token")
+  const metadata_alias = __secret_alias(secrets, raw, "verification_token")
     ?? __secret_alias(
-    harness,
+    secrets,
     raw,
     "signing_secret",
   )
-    ?? __secret_alias(harness, raw, "secret")
+    ?? __secret_alias(secrets, raw, "secret")
   if metadata_alias != nil && trim(to_string(metadata_alias)) != "" {
     return metadata_alias
   }
   const configured = __configured_secret(
-    harness,
+    secrets,
     raw?.config?.verification_token ?? raw?.secrets?.verification_token
       ?? raw?.metadata?.secrets
       ?.verification_token,
     "verification_token",
   )
     ?? __configured_secret(
-    harness,
+    secrets,
     raw?.config?.signing_secret ?? raw?.secrets?.signing_secret
       ?? raw?.metadata?.secrets
       ?.signing_secret,
     "signing_secret",
   )
-    ?? __configured_secret(harness, raw?.config?.secret ?? raw?.secrets?.secret, "secret")
+    ?? __configured_secret(secrets, raw?.config?.secret ?? raw?.secrets?.secret, "secret")
   if configured != nil && trim(to_string(configured)) != "" {
     return configured
   }
   const metadata_secret = __configured_secret(
-    harness,
+    secrets,
     raw?.metadata?.verification_token,
     "verification_token",
   )
-    ?? __configured_secret(harness, raw?.metadata?.signing_secret, "signing_secret")
+    ?? __configured_secret(secrets, raw?.metadata?.signing_secret, "signing_secret")
     ?? __configured_secret(
-    harness,
+    secrets,
     raw?.metadata?.secret,
     "secret",
   )
@@ -1527,7 +1527,7 @@ fn __signing_secret(harness: HarnessSecrets, raw) {
   }
   const binding = __binding_for_raw(raw)
   const from_binding = __configured_secret(
-    harness,
+    secrets,
     binding?.verification_token ?? binding?.secrets?.verification_token
       ?? binding?.config
       ?.verification_token
@@ -1535,14 +1535,14 @@ fn __signing_secret(harness: HarnessSecrets, raw) {
     "verification_token",
   )
     ?? __configured_secret(
-    harness,
+    secrets,
     binding?.signing_secret ?? binding?.secrets?.signing_secret
       ?? binding?.config?.signing_secret
       ?? binding?.config?.secrets?.signing_secret,
     "signing_secret",
   )
     ?? __configured_secret(
-    harness,
+    secrets,
     binding?.secret ?? binding?.secrets?.secret ?? binding?.config?.secret,
     "secret",
   )
@@ -1574,7 +1574,7 @@ fn __is_allowed_notion_secret_id(value) {
   return raw.starts_with(NOTION_PROVIDER_ID + "/")
 }
 
-fn __configured_secret(harness: HarnessSecrets, value, fallback_name) {
+fn __configured_secret(secrets: HarnessSecrets, value, fallback_name) {
   if value == nil || trim(to_string(value)) == "" {
     return nil
   }
@@ -1586,7 +1586,7 @@ fn __configured_secret(harness: HarnessSecrets, value, fallback_name) {
       return text
     }
     const resolved = __secret_get_candidates(
-      harness,
+      secrets,
       [
         __secret_id_candidate(text, fallback_name),
         NOTION_PROVIDER_ID + "/" + to_string(fallback_name),
@@ -1600,7 +1600,7 @@ fn __configured_secret(harness: HarnessSecrets, value, fallback_name) {
   return text
 }
 
-fn __secret_alias(harness: HarnessSecrets, raw, name) {
+fn __secret_alias(secrets: HarnessSecrets, raw, name) {
   const metadata = raw?.metadata ?? {}
   const value = metadata?.secret_ids?.get(name) ?? metadata?.config?.secret_ids?.get(name)
     ?? raw
@@ -1611,7 +1611,7 @@ fn __secret_alias(harness: HarnessSecrets, raw, name) {
     return nil
   }
   return __secret_get_candidates(
-    harness,
+    secrets,
     [
       __secret_id_candidate(value, name),
       NOTION_PROVIDER_ID + "/" + to_string(name),
@@ -1640,9 +1640,9 @@ fn __secret_id_candidate(value, fallback_name) {
   return nil
 }
 
-fn __secret_get_candidates(harness: HarnessSecrets, secret_ids) {
+fn __secret_get_candidates(secrets: HarnessSecrets, secret_ids) {
   for secret_id in secret_ids ?? [] {
-    const secret = __secret_get_optional(harness, secret_id)
+    const secret = __secret_get_optional(secrets, secret_id)
     if secret != nil && trim(to_string(secret)) != "" {
       return secret
     }
@@ -1650,12 +1650,12 @@ fn __secret_get_candidates(harness: HarnessSecrets, secret_ids) {
   return nil
 }
 
-fn __secret_get_optional(harness: HarnessSecrets, secret_id) {
+fn __secret_get_optional(secrets: HarnessSecrets, secret_id) {
   if secret_id == nil || trim(to_string(secret_id)) == "" {
     return nil
   }
   const resolved = try {
-    harness.read(to_string(secret_id))
+    secrets.read(to_string(secret_id))
   }
   if is_err(resolved) {
     return nil
@@ -1663,12 +1663,12 @@ fn __secret_get_optional(harness: HarnessSecrets, secret_id) {
   return to_string(unwrap(resolved))
 }
 
-fn __verify_notion_signature(harness: HarnessSecrets, raw, headers, body_text) {
+fn __verify_notion_signature(secrets: HarnessSecrets, raw, headers, body_text) {
   const signature = __header(headers, "x-notion-signature")
   if signature == nil || signature == "" {
     return __err("missing_signature", "missing x-notion-signature header")
   }
-  const secret = __signing_secret(harness, raw)
+  const secret = __signing_secret(secrets, raw)
   if secret == nil || trim(to_string(secret)) == "" {
     return __err("missing_secret", "notion verification_token or signing_secret is required")
   }
@@ -2643,9 +2643,9 @@ fn __notion_headers(cfg) {
   }
 }
 
-fn __notion_request(harness: HarnessNet, method, url, body, cfg) {
+fn __notion_request(net: HarnessNet, method, url, body, cfg) {
   const response = try {
-    harness.request(
+    net.request(
       method,
       url,
       {

@@ -10,7 +10,7 @@ pub fn notion_headers(secret, body) {
  * connector's F6 freshness window (300s). Re-emits canonical JSON via
  * `json_stringify` so callers can sign over the refreshed bytes.
  */
-pub fn refresh_body_timestamp(harness: HarnessClock, body) {
+pub fn refresh_body_timestamp(clock: HarnessClock, body) {
   const parsed = try {
     json_parse(body)
   }
@@ -21,21 +21,21 @@ pub fn refresh_body_timestamp(harness: HarnessClock, body) {
   if type_of(payload) != "dict" {
     return body
   }
-  const now_iso = date_format(harness.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
+  const now_iso = date_format(clock.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
   return json_stringify(payload + {timestamp: now_iso})
 }
 
 /** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
-pub fn signed_raw(harness: HarnessClock, secret, body, extra = nil) {
-  const fresh = refresh_body_timestamp(harness, body)
+pub fn signed_raw(clock: HarnessClock, secret, body, extra = nil) {
+  const fresh = refresh_body_timestamp(clock, body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
     + (extra
     ?? {})
 }
 
 /** Read a recorded webhook fixture body by basename. */
-pub fn fixture_body(harness: HarnessFs, name) {
-  return harness.read_text(harness.source_dir() + "/fixtures/webhooks/" + name + ".json")
+pub fn fixture_body(fs: HarnessFs, name) {
+  return fs.read_text(fs.source_dir() + "/fixtures/webhooks/" + name + ".json")
 }
 
 /**
