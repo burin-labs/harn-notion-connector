@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Repinned the runtime to Harn 0.10.53 and completed the typed capability
+  cutover. Every connector runtime export — `init`, `activate`, `shutdown`,
+  `normalize_inbound`, `call`, `poll_tick` — now takes the root `Harness` as
+  its first parameter, which the connector ABI requires. Metadata exports
+  (`provider_id`, `kinds`, `payload_schema`) remain pure.
+- Rewrote the `subscription verification` contract fixture against the
+  connector's own payload. Harn 0.10.x removed the builtin `notion` provider
+  schema, so the payload the connector returns is now the asserted surface
+  instead of being renormalized by a host schema first.
+
 ## 0.1.1 - 2026-07-06
 
 - Added deterministic artifact helper descriptors:

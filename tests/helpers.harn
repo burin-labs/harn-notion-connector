@@ -10,7 +10,7 @@ pub fn notion_headers(secret, body) {
  * connector's F6 freshness window (300s). Re-emits canonical JSON via
  * `json_stringify` so callers can sign over the refreshed bytes.
  */
-pub fn refresh_body_timestamp(body) {
+pub fn refresh_body_timestamp(harness: HarnessClock, body) {
   const parsed = try {
     json_parse(body)
   }
@@ -21,21 +21,21 @@ pub fn refresh_body_timestamp(body) {
   if type_of(payload) != "dict" {
     return body
   }
-  const now_iso = date_format(harness.clock.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
+  const now_iso = date_format(harness.timestamp(), "%Y-%m-%dT%H:%M:%SZ")
   return json_stringify(payload + {timestamp: now_iso})
 }
 
 /** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
-pub fn signed_raw(secret, body, extra = nil) {
-  const fresh = refresh_body_timestamp(body)
+pub fn signed_raw(harness: HarnessClock, secret, body, extra = nil) {
+  const fresh = refresh_body_timestamp(harness, body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
     + (extra
     ?? {})
 }
 
 /** Read a recorded webhook fixture body by basename. */
-pub fn fixture_body(name) {
-  return harness.fs.read_text(source_dir() + "/fixtures/webhooks/" + name + ".json")
+pub fn fixture_body(harness: HarnessFs, name) {
+  return harness.read_text(harness.source_dir() + "/fixtures/webhooks/" + name + ".json")
 }
 
 /**
@@ -43,24 +43,25 @@ pub fn fixture_body(name) {
  * the F6 freshness check accepts it. Use this in assertions that expect
  * the unmodified-fixture event payload (other than the timestamp field).
  */
-pub fn fixture_body_fresh(name) {
-  return refresh_body_timestamp(fixture_body(name))
+pub fn fixture_body_fresh(harness: {clock: HarnessClock, fs: HarnessFs}, name) {
+  return refresh_body_timestamp(harness.clock, fixture_body(harness.fs, name))
 }
 
 /** Build a signed raw inbound webhook envelope from a recorded fixture. */
-pub fn fixture_raw(name, secret, extra = nil) {
-  return signed_raw(secret, fixture_body(name), extra)
+pub fn fixture_raw(harness: {clock: HarnessClock, fs: HarnessFs}, name, secret, extra = nil) {
+  return signed_raw(harness.clock, secret, fixture_body(harness.fs, name), extra)
 }
 
 /** Assert the exported connector lifecycle/interface surface. */
-pub fn assert_notion_interface() {
-  shutdown()
+pub fn assert_notion_interface(harness: Harness) {
+  shutdown(harness)
   require provider_id() == "notion", "provider id"
   require kinds() == ["webhook", "poll"], "supported kinds"
   require payload_schema().harn_schema_name == "NotionEventPayload", "payload schema name"
-  const initialized = init({verification_token: "test-secret", api_token: "secret_api"})
+  const initialized = init(harness, {verification_token: "test-secret", api_token: "secret_api"})
   require initialized.initialized, "init stores state"
   const activated = activate(
+    harness,
     [
       {
         id: "notion.webhook",

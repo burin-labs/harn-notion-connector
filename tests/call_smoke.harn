@@ -1,12 +1,13 @@
 import { artifact_export_request, artifact_import_request, call, init, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 
-pipeline default() {
-  egress_policy({allow: ["api.notion.com"], default: "deny"})
-  shutdown()
-  const normalized = init("invalid-context")
+pipeline default(harness: Harness) {
+  harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
+  shutdown(harness)
+  const normalized = init(harness, "invalid-context")
   expect_eq(normalized.ctx, {}, "non-dict init context is normalized")
   const initialized = init(
+    harness,
     {
       api_token: "secret_api",
       api_base_url: "https://api.notion.com/v1",
@@ -14,9 +15,9 @@ pipeline default() {
     },
   )
   expect_eq(initialized.ctx.api_token, "secret_api", "dict init context is retained")
-  http_mock_clear()
+  harness.testing.http_mock_clear()
   const base = "https://api.notion.com/v1"
-  http_mock(
+  harness.testing.http_mock(
     "*",
     base + "/*",
     {
@@ -38,18 +39,19 @@ pipeline default() {
       ],
     },
   )
-  const page = call("pages.retrieve", {page_id: "page_123"})
+  const page = call(harness, "pages.retrieve", {page_id: "page_123"})
   expect_eq(page.id, "page_123", "pages.retrieve response")
-  const query = call("databases.query", {database_id: "db_123", page_size: 10})
+  const query = call(harness, "databases.query", {database_id: "db_123", page_size: 10})
   expect_eq(query.object, "list", "databases.query response")
-  call("pages.create", {parent: {database_id: "db_123"}, properties: {Name: {title: []}}})
-  call("blocks.children.append", {block_id: "page_123", children: []})
+  call(harness, "pages.create", {parent: {database_id: "db_123"}, properties: {Name: {title: []}}})
+  call(harness, "blocks.children.append", {block_id: "page_123", children: []})
   call(
+    harness,
     "search.query",
     {query: "task", page_size: 25, start_cursor: "cursor_a", api_token: "secret_api"},
   )
-  call("comments.create", {discussion_id: "discussion_123", markdown: "Follow up"})
-  const calls = http_mock_calls()
+  call(harness, "comments.create", {discussion_id: "discussion_123", markdown: "Follow up"})
+  const calls = harness.testing.http_mock_calls()
   expect_eq(len(calls), 6, "all expected outbound methods dispatched")
   expect_eq(calls[0].method, "GET", "retrieve uses GET")
   expect_eq(calls[0].url, base + "/pages/page_123", "retrieve URL")
@@ -80,8 +82,8 @@ pipeline default() {
     nil,
     "discussion markdown comment does not synthesize an empty parent",
   )
-  http_mock_clear()
-  http_mock(
+  harness.testing.http_mock_clear()
+  harness.testing.http_mock(
     "GET",
     base + "/pages/missing",
     {
@@ -90,21 +92,23 @@ pipeline default() {
       headers: {"x-request-id": "req_404"},
     },
   )
-  const missing = call("pages.retrieve", {page_id: "missing"})
+  const missing = call(harness, "pages.retrieve", {page_id: "missing"})
   expect(is_err(missing), "non-2xx response becomes Err")
   expect_eq(unwrap_err(missing).code, "object_not_found", "NotionError code")
   expect_eq(unwrap_err(missing).status, 404, "NotionError status")
   expect_eq(unwrap_err(missing).request_id, "req_404", "NotionError request id")
-  const unsupported = call("workspaces.retrieve", {workspace_id: "workspace_1"})
+  const unsupported = call(harness, "workspaces.retrieve", {workspace_id: "workspace_1"})
   expect(is_err(unsupported), "unsupported method rejected")
   expect_eq(unwrap_err(unsupported).code, "method_not_found", "unsupported method code")
   const unapproved_api_call = call(
+    harness,
     "api_call",
     {request_method: "POST", path: "/pages", body: {parent: {page_id: "page_123"}}},
   )
   expect(is_err(unapproved_api_call), "write-like api_call requires approval")
   expect_eq(unwrap_err(unapproved_api_call).code, "approval_required", "api_call approval code")
   const page_export = artifact_export_request(
+    {env: harness.env, secrets: harness.secrets},
     {page_id: "page_123", format: "page", name: "report.json"},
   )
   expect_eq(page_export.kind, "artifact_export", "page export descriptor kind")
@@ -112,20 +116,26 @@ pipeline default() {
   expect_eq(page_export.url, base + "/pages/page_123", "page export URL")
   expect_eq(page_export.artifact.mime_type, "application/json", "page export mime")
   const block_export = call(
+    harness,
     "artifact.export_request",
     {page_id: "page_123", format: "blocks", page_size: 25},
   )
   expect_eq(block_export.url, base + "/blocks/page_123/children", "block export URL")
   expect_eq(block_export.query.page_size, 25, "block export page size")
   const file_export = artifact_export_request(
+    {env: harness.env, secrets: harness.secrets},
     {file_url: "https://secure.notion-static.com/report.pdf", name: "report.pdf"},
   )
   expect_eq(file_export.url, "https://secure.notion-static.com/report.pdf", "file URL export")
   expect_eq(file_export.artifact.mime_type, "application/pdf", "file MIME inferred")
-  const pdf_export = artifact_export_request({page_id: "page_123", format: "pdf"})
+  const pdf_export = artifact_export_request(
+    {env: harness.env, secrets: harness.secrets},
+    {page_id: "page_123", format: "pdf"},
+  )
   expect(is_err(pdf_export), "Notion page PDF export is unsupported")
   expect_eq(unwrap_err(pdf_export).code, "unsupported_pdf_export", "Notion PDF export code")
   const create_import = artifact_import_request(
+    {env: harness.env, secrets: harness.secrets},
     {
       mode: "create_page",
       parent: {page_id: "parent_123"},
@@ -144,6 +154,7 @@ pipeline default() {
   )
   expect_eq(create_import.media.uri, "artifact://session/report.json", "create import media URI")
   const append_import = call(
+    harness,
     "artifact.import_request",
     {
       mode: "append_blocks",
@@ -155,6 +166,7 @@ pipeline default() {
   expect_eq(append_import.url, base + "/blocks/page_123/children", "append import URL")
   expect_eq(len(append_import.body.children), 1, "append import children")
   const file_import = artifact_import_request(
+    {env: harness.env, secrets: harness.secrets},
     {
       mode: "external_file",
       filename: "report.pdf",
@@ -167,7 +179,7 @@ pipeline default() {
   expect_eq(file_import.body.content_type, "application/pdf", "external file content type")
   expect_eq(len(file_import.steps), 2, "external file import attach steps")
   expect_eq(file_import.steps[1].id, "append_file_block", "external file attach step")
-  const missing_auth = call("pages.retrieve", {page_id: "page_123", api_token: ""})
+  const missing_auth = call(harness, "pages.retrieve", {page_id: "page_123", api_token: ""})
   expect(is_err(missing_auth), "empty api token rejects before dispatch")
   expect_eq(unwrap_err(missing_auth).code, "missing_api_token", "missing api token code")
   expect_eq(
@@ -178,17 +190,19 @@ pipeline default() {
   // F8: outbound calls to non-allowlisted hosts are rejected so the
   // workspace API token cannot reach attacker-controlled origins.
   const bad_host = call(
+    harness,
     "pages.retrieve",
     {page_id: "page_123", api_token: "secret_api", api_base_url: "https://evil.example/v1"},
   )
   expect(is_err(bad_host), "F8: disallowed api_base_url rejected")
   expect_eq(unwrap_err(bad_host).code, "disallowed_api_base_url", "F8: disallowed host code")
   const bad_url = call(
+    harness,
     "pages.retrieve",
     {page_id: "page_123", api_token: "secret_api", api_base_url: "not-a-url"},
   )
   expect(is_err(bad_url), "F8: malformed api_base_url rejected")
   expect_eq(unwrap_err(bad_url).code, "invalid_api_base_url", "F8: malformed url code")
-  http_mock_clear()
-  shutdown()
+  harness.testing.http_mock_clear()
+  shutdown(harness)
 }

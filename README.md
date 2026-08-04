@@ -61,9 +61,13 @@ trigger watch_database on notion {
 ```
 
 The connector exports the standard Harn Connector interface:
-`provider_id()`, `kinds()`, `payload_schema()`, `init(ctx)`,
-`activate(bindings)`, `shutdown()`, `normalize_inbound(raw)`,
-`call(method, args)`, `poll_tick(ctx)`, and `method_capabilities()`.
+`provider_id()`, `kinds()`, `payload_schema()`, `init(harness, ctx)`,
+`activate(harness, bindings)`, `shutdown(harness)`,
+`normalize_inbound(harness, raw)`, `call(harness, method, args)`,
+`poll_tick(harness, ctx)`, and `method_capabilities()`.
+
+Every runtime export takes the root `Harness` as its first parameter and
+attenuates it to the handles it needs. The metadata exports stay pure.
 
 ## Supported surface
 
@@ -124,7 +128,8 @@ Operational limits:
   connector prefers `raw.raw_body` when the host supplies it and falls back to
   `raw.body_text`; parsed JSON alone is rejected because HMAC verification must
   use the original request body.
-- `normalize_inbound(raw)` is deterministic and does not perform network I/O.
+- `normalize_inbound(harness, raw)` is deterministic and does not perform
+  network I/O.
 - Harn owns webhook routing, poll schedules, leases, retry policy, durable
   cursor/state, and secret storage. This connector validates and normalizes
   inbound payloads, resolves Harn-managed secret IDs passed in binding or
@@ -212,7 +217,7 @@ OAuth access token and pass it as `api_token`, `token`, or
 development.
 
 ```harn
-init({
+init(harness, {
   api_token: harness.env.get("NOTION_TOKEN"),
   notion_version: "2026-03-11",
 })
@@ -241,7 +246,8 @@ See Notion's official docs for
 
 ### Local webhook testing
 
-Use `normalize_inbound(raw)` with the exact retained request body received by
+Use `normalize_inbound(harness, raw)` with the exact retained request body
+received by
 your HTTP listener. Signature verification is computed over `raw.raw_body` when
 present, otherwise `raw.body_text`; parsed JSON alone is intentionally rejected
 for signed webhook events.
@@ -258,7 +264,7 @@ let raw = {
     ["request-id"]: "req_local",
   },
 }
-let result = notion_connector.normalize_inbound(raw)
+let result = notion_connector.normalize_inbound(harness, raw)
 ```
 
 The package also declares `[[connector_contract.fixtures]]` in `harn.toml`.

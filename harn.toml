@@ -108,7 +108,9 @@ body = '''{"verification_token":"verify-token","type":"subscription.verification
 expect_type = "event"
 expect_kind = "notion.subscription.verification"
 expect_signature_state = "unsigned"
-expect_payload_contains = { provider = "notion", event = "notion.subscription.verification", verification_token = "verify-token", entity_id = "verification_1", raw = { event_type = "notion.subscription.verification", resource_id = "verification_1" } }
+# The connector owns this payload schema. Assertions describe the payload
+# normalize_inbound returns, not a host envelope wrapped around it.
+expect_payload_contains = { provider = "notion", event = "notion.subscription.verification", event_type = "notion.subscription.verification", verification_token = "verify-token", entity_id = "verification_1", resource_id = "verification_1" }
 expect_event_count = 1
 
 [[connector_contract.fixtures]]
