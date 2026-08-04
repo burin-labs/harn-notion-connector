@@ -489,7 +489,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return artifact_import_request({env: harness.env, secrets: harness.secrets}, args ?? {})
   }
   if to_string(method).starts_with("oauth.") {
-    return __oauth_call({env: harness.env, secrets: harness.secrets}, method, args ?? {})
+    return __oauth_call(harness, method, args ?? {})
   }
   const config = __outbound_config({env: harness.env, secrets: harness.secrets}, args ?? {})
   if is_err(config) {
@@ -503,7 +503,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_a_block(__sdk_client(cfg), unwrap(block_id))
+        retrieve_a_block(harness, __sdk_client(cfg), unwrap(block_id))
       },
     )
   }
@@ -514,7 +514,12 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_a_block(__sdk_client(cfg), unwrap(block_id), __call_body(args, ["block_id", "id"]))
+        update_a_block(
+          harness,
+          __sdk_client(cfg),
+          unwrap(block_id),
+          __call_body(args, ["block_id", "id"]),
+        )
       },
     )
   }
@@ -525,7 +530,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        delete_a_block(__sdk_client(cfg), unwrap(block_id))
+        delete_a_block(harness, __sdk_client(cfg), unwrap(block_id))
       },
     )
   }
@@ -536,7 +541,13 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        get_block_children(__sdk_client(cfg), unwrap(block_id), args?.start_cursor, args?.page_size)
+        get_block_children(
+          harness,
+          __sdk_client(cfg),
+          unwrap(block_id),
+          args?.start_cursor,
+          args?.page_size,
+        )
       },
     )
   }
@@ -547,14 +558,14 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_a_page(__sdk_client(cfg), unwrap(page_id), args?.filter_properties)
+        retrieve_a_page(harness, __sdk_client(cfg), unwrap(page_id), args?.filter_properties)
       },
     )
   }
   if method == "pages.create" {
     return __sdk_result(
       try {
-        post_page(__sdk_client(cfg), __call_body(args))
+        post_page(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -565,7 +576,12 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        patch_page(__sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
+        patch_page(
+          harness,
+          __sdk_client(cfg),
+          unwrap(page_id),
+          __call_body(args, ["page_id", "id"]),
+        )
       },
     )
   }
@@ -576,7 +592,12 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_page_markdown(__sdk_client(cfg), unwrap(page_id), args?.include_transcript)
+        retrieve_page_markdown(
+          harness,
+          __sdk_client(cfg),
+          unwrap(page_id),
+          args?.include_transcript,
+        )
       },
     )
   }
@@ -588,6 +609,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         update_page_markdown(
+          harness,
           __sdk_client(cfg),
           unwrap(page_id),
           __call_body(args, ["page_id", "id"]),
@@ -602,7 +624,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        move_page(__sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
+        move_page(harness, __sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
       },
     )
   }
@@ -618,6 +640,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         retrieve_a_page_property(
+          harness,
           __sdk_client(cfg),
           unwrap(page_id),
           unwrap(property_id),
@@ -630,7 +653,7 @@ pub fn call(harness: Harness, method, args = {}) {
   if method == "databases.create" {
     return __sdk_result(
       try {
-        create_database(__sdk_client(cfg), __call_body(args))
+        create_database(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -641,7 +664,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_database(__sdk_client(cfg), unwrap(database_id))
+        retrieve_database(harness, __sdk_client(cfg), unwrap(database_id))
       },
     )
   }
@@ -653,6 +676,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         update_database(
+          harness,
           __sdk_client(cfg),
           unwrap(database_id),
           __call_body(args, ["database_id", "id"]),
@@ -679,7 +703,7 @@ pub fn call(harness: Harness, method, args = {}) {
   if method == "data_sources.create" {
     return __sdk_result(
       try {
-        create_a_database(__sdk_client(cfg), __call_body(args))
+        create_a_database(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -690,7 +714,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_a_data_source(__sdk_client(cfg), unwrap(data_source_id))
+        retrieve_a_data_source(harness, __sdk_client(cfg), unwrap(data_source_id))
       },
     )
   }
@@ -702,6 +726,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         update_a_data_source(
+          harness,
           __sdk_client(cfg),
           unwrap(data_source_id),
           __call_body(args, ["data_source_id", "id"]),
@@ -717,6 +742,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         post_database_query(
+          harness,
           __sdk_client(cfg),
           unwrap(data_source_id),
           __call_body(args, ["data_source_id", "id", "filter_properties"]),
@@ -733,6 +759,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         list_data_source_templates(
+          harness,
           __sdk_client(cfg),
           unwrap(data_source_id),
           args?.name,
@@ -753,14 +780,14 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        patch_block_children(__sdk_client(cfg), block_id, body)
+        patch_block_children(harness, __sdk_client(cfg), block_id, body)
       },
     )
   }
   if method == "search.query" {
     return __sdk_result(
       try {
-        post_search(__sdk_client(cfg), __call_body(args))
+        post_search(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -777,14 +804,20 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        create_a_comment(__sdk_client(cfg), variant)
+        create_a_comment(harness, __sdk_client(cfg), variant)
       },
     )
   }
   if method == "comments.list" {
     return __sdk_result(
       try {
-        list_comments(__sdk_client(cfg), args?.block_id, args?.start_cursor, args?.page_size)
+        list_comments(
+          harness,
+          __sdk_client(cfg),
+          args?.block_id,
+          args?.start_cursor,
+          args?.page_size,
+        )
       },
     )
   }
@@ -795,7 +828,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_comment(__sdk_client(cfg), unwrap(comment_id))
+        retrieve_comment(harness, __sdk_client(cfg), unwrap(comment_id))
       },
     )
   }
@@ -807,6 +840,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         update_a_comment(
+          harness,
           __sdk_client(cfg),
           unwrap(comment_id),
           __call_body(args, ["comment_id", "id"]),
@@ -821,28 +855,40 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        delete_a_comment(__sdk_client(cfg), unwrap(comment_id))
+        delete_a_comment(harness, __sdk_client(cfg), unwrap(comment_id))
       },
     )
   }
   if method == "custom_emojis.list" {
     return __sdk_result(
       try {
-        list_custom_emojis(__sdk_client(cfg), args?.start_cursor, args?.page_size, args?.name)
+        list_custom_emojis(
+          harness,
+          __sdk_client(cfg),
+          args?.start_cursor,
+          args?.page_size,
+          args?.name,
+        )
       },
     )
   }
   if method == "file_uploads.list" {
     return __sdk_result(
       try {
-        list_file_uploads(__sdk_client(cfg), args?.status, args?.start_cursor, args?.page_size)
+        list_file_uploads(
+          harness,
+          __sdk_client(cfg),
+          args?.status,
+          args?.start_cursor,
+          args?.page_size,
+        )
       },
     )
   }
   if method == "file_uploads.create" {
     return __sdk_result(
       try {
-        create_file(__sdk_client(cfg), __call_body(args))
+        create_file(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -853,7 +899,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_file_upload(__sdk_client(cfg), unwrap(file_upload_id))
+        retrieve_file_upload(harness, __sdk_client(cfg), unwrap(file_upload_id))
       },
     )
   }
@@ -864,7 +910,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        complete_file_upload(__sdk_client(cfg), unwrap(file_upload_id))
+        complete_file_upload(harness, __sdk_client(cfg), unwrap(file_upload_id))
       },
     )
   }
@@ -876,6 +922,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         upload_file(
+          harness,
           __sdk_client(cfg),
           unwrap(file_upload_id),
           __call_body(args, ["file_upload_id", "id"]),
@@ -886,14 +933,14 @@ pub fn call(harness: Harness, method, args = {}) {
   if method == "users.list" {
     return __sdk_result(
       try {
-        get_users(__sdk_client(cfg), args?.start_cursor, args?.page_size)
+        get_users(harness, __sdk_client(cfg), args?.start_cursor, args?.page_size)
       },
     )
   }
   if method == "users.me" {
     return __sdk_result(
       try {
-        get_self(__sdk_client(cfg))
+        get_self(harness, __sdk_client(cfg))
       },
     )
   }
@@ -904,7 +951,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        get_user(__sdk_client(cfg), unwrap(user_id))
+        get_user(harness, __sdk_client(cfg), unwrap(user_id))
       },
     )
   }
@@ -912,6 +959,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         list_views(
+          harness,
           __sdk_client(cfg),
           args?.database_id,
           args?.data_source_id,
@@ -924,7 +972,7 @@ pub fn call(harness: Harness, method, args = {}) {
   if method == "views.create" {
     return __sdk_result(
       try {
-        create_view(__sdk_client(cfg), __call_body(args))
+        create_view(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -935,7 +983,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        retrieve_a_view(__sdk_client(cfg), unwrap(view_id))
+        retrieve_a_view(harness, __sdk_client(cfg), unwrap(view_id))
       },
     )
   }
@@ -946,7 +994,12 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        update_a_view(__sdk_client(cfg), unwrap(view_id), __call_body(args, ["view_id", "id"]))
+        update_a_view(
+          harness,
+          __sdk_client(cfg),
+          unwrap(view_id),
+          __call_body(args, ["view_id", "id"]),
+        )
       },
     )
   }
@@ -957,7 +1010,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        delete_view(__sdk_client(cfg), unwrap(view_id))
+        delete_view(harness, __sdk_client(cfg), unwrap(view_id))
       },
     )
   }
@@ -968,7 +1021,12 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        create_view_query(__sdk_client(cfg), unwrap(view_id), __call_body(args, ["view_id", "id"]))
+        create_view_query(
+          harness,
+          __sdk_client(cfg),
+          unwrap(view_id),
+          __call_body(args, ["view_id", "id"]),
+        )
       },
     )
   }
@@ -984,6 +1042,7 @@ pub fn call(harness: Harness, method, args = {}) {
     return __sdk_result(
       try {
         get_view_query_results(
+          harness,
           __sdk_client(cfg),
           unwrap(view_id),
           unwrap(query_id),
@@ -1004,7 +1063,7 @@ pub fn call(harness: Harness, method, args = {}) {
     }
     return __sdk_result(
       try {
-        delete_view_query(__sdk_client(cfg), unwrap(view_id), unwrap(query_id))
+        delete_view_query(harness, __sdk_client(cfg), unwrap(view_id), unwrap(query_id))
       },
     )
   }
@@ -2541,8 +2600,15 @@ fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
   )
 }
 
-fn __oauth_call(harness: {env: HarnessEnv, secrets: HarnessSecrets}, method, args) {
-  const config = __oauth_config(harness, args ?? {})
+/**
+ * Dispatch one `oauth.*` method against the SDK's generated OAuth operations.
+ *
+ * Takes the root harness because those operations do. `__oauth_config` reads
+ * only env and secrets, so it keeps the narrow record and is attenuated here
+ * rather than widened to match.
+ */
+fn __oauth_call(harness: Harness, method, args) {
+  const config = __oauth_config({env: harness.env, secrets: harness.secrets}, args ?? {})
   if is_err(config) {
     return config
   }
@@ -2560,21 +2626,21 @@ fn __oauth_call(harness: {env: HarnessEnv, secrets: HarnessSecrets}, method, arg
     }
     return __sdk_result(
       try {
-        create_a_token(__oauth_client(cfg), variant)
+        create_a_token(harness, __oauth_client(cfg), variant)
       },
     )
   }
   if method == "oauth.token.introspect" {
     return __sdk_result(
       try {
-        introspect_token(__oauth_client(cfg), __oauth_call_body(args))
+        introspect_token(harness, __oauth_client(cfg), __oauth_call_body(args))
       },
     )
   }
   if method == "oauth.token.revoke" {
     return __sdk_result(
       try {
-        revoke_token(__oauth_client(cfg), __oauth_call_body(args))
+        revoke_token(harness, __oauth_client(cfg), __oauth_call_body(args))
       },
     )
   }
