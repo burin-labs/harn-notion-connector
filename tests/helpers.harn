@@ -30,7 +30,7 @@ pub fn signed_raw(clock: HarnessClock, secret, body, extra = nil) {
   const fresh = refresh_body_timestamp(clock, body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
     + (extra
-    ?? {})
+      ?? {})
 }
 
 /** Read a recorded webhook fixture body by basename. */
