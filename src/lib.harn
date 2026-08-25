@@ -285,13 +285,13 @@ pub fn method_capabilities() {
 pub fn init(harness: Harness, ctx = nil) {
   const next = __default_state()
     + {
-    initialized: true,
-    ctx: if type_of(ctx) == "dict" {
-      ctx
-    } else {
-      {}
-    },
-  }
+      initialized: true,
+      ctx: if type_of(ctx) == "dict" {
+        ctx
+      } else {
+        {}
+      },
+    }
   __set_state(next)
   return next
 }
@@ -303,9 +303,7 @@ pub fn activate(harness: Harness, bindings = []) {
   let seen_paths = {}
   for binding in bindings ?? [] {
     const binding_id = (binding?.binding_id ?? binding?.id ?? "binding-")
-      + to_string(
-      len(webhook_bindings.keys()) + len(poll_bindings.keys()),
-    )
+      + to_string(len(webhook_bindings.keys()) + len(poll_bindings.keys()))
     const kind = binding?.kind ?? binding?.source?.kind ?? binding?.config?.kind ?? "webhook"
     const normalized = binding + {binding_id: binding_id, kind: kind}
     if kind == "webhook" {
@@ -331,11 +329,7 @@ pub fn activate(harness: Harness, bindings = []) {
     }
   }
   const next = __state()
-    + {
-    active: true,
-    webhook_bindings: webhook_bindings,
-    poll_bindings: poll_bindings,
-  }
+    + {active: true, webhook_bindings: webhook_bindings, poll_bindings: poll_bindings}
   __set_state(next)
   return {
     provider: NOTION_PROVIDER_ID,
@@ -1208,9 +1202,7 @@ pub fn artifact_import_request(harness: {env: HarnessEnv, secrets: HarnessSecret
       body: {
         parent: parent,
         properties: args?.properties
-          ?? __title_properties(
-          args?.title ?? args?.name ?? "Imported artifact",
-        ),
+          ?? __title_properties(args?.title ?? args?.name ?? "Imported artifact"),
         children: args?.children ?? args?.blocks ?? [],
         icon: args?.icon,
         cover: args?.cover,
@@ -1270,57 +1262,57 @@ pub fn artifact_import_request(harness: {env: HarnessEnv, secrets: HarnessSecret
     if external_url == nil {
       steps = steps
         + [
-        {
-          id: "send_file_upload",
-          method: "POST",
-          url_template: __notion_api_url(
-            notion_cfg.api_base_url,
-            "/file_uploads/{file_upload_id}/send",
-          ),
-          multipart: {
-            file_field: "file",
-            uri: args?.uri ?? args?.path,
-            part_number: args?.part_number,
+          {
+            id: "send_file_upload",
+            method: "POST",
+            url_template: __notion_api_url(
+              notion_cfg.api_base_url,
+              "/file_uploads/{file_upload_id}/send",
+            ),
+            multipart: {
+              file_field: "file",
+              uri: args?.uri ?? args?.path,
+              part_number: args?.part_number,
+            },
           },
-        },
-      ]
+        ]
     }
     if args?.complete ?? false {
       steps = steps
         + [
-        {
-          id: "complete_file_upload",
-          method: "POST",
-          url_template: __notion_api_url(
-            notion_cfg.api_base_url,
-            "/file_uploads/{file_upload_id}/complete",
-          ),
-          body: {},
-        },
-      ]
+          {
+            id: "complete_file_upload",
+            method: "POST",
+            url_template: __notion_api_url(
+              notion_cfg.api_base_url,
+              "/file_uploads/{file_upload_id}/complete",
+            ),
+            body: {},
+          },
+        ]
     }
     if args?.attach_to_block_id != nil || args?.attach_to_page_id != nil {
       const target = args?.attach_to_block_id ?? args?.attach_to_page_id
       steps = steps
         + [
-        {
-          id: "append_file_block",
-          method: "PATCH",
-          url: __notion_api_url(
-            notion_cfg.api_base_url,
-            "/blocks/" + url_encode(to_string(target)) + "/children",
-          ),
-          body_template: {
-            children: [
-              {
-                object: "block",
-                type: "file",
-                file: {type: "file_upload", file_upload: {id: "{file_upload_id}"}},
-              },
-            ],
+          {
+            id: "append_file_block",
+            method: "PATCH",
+            url: __notion_api_url(
+              notion_cfg.api_base_url,
+              "/blocks/" + url_encode(to_string(target)) + "/children",
+            ),
+            body_template: {
+              children: [
+                {
+                  object: "block",
+                  type: "file",
+                  file: {type: "file_upload", file_upload: {id: "{file_upload_id}"}},
+                },
+              ],
+            },
           },
-        },
-      ]
+        ]
     }
     return {
       provider: NOTION_PROVIDER_ID,
@@ -1470,7 +1462,7 @@ fn __reject_err(err) {
   const message = err?.message ?? "request rejected"
   const status = if code == "missing_signature" || code == "invalid_signature"
     || code
-    == "missing_secret"
+      == "missing_secret"
     || code == "timestamp_out_of_window" {
     401
   } else {
@@ -1533,21 +1525,13 @@ fn __binding_for_raw(raw) {
 
 fn __signing_secret(secrets: HarnessSecrets, raw) {
   const direct = __configured_secret(secrets, raw?.verification_token, "verification_token")
-    ?? __configured_secret(
-    secrets,
-    raw?.signing_secret,
-    "signing_secret",
-  )
+    ?? __configured_secret(secrets, raw?.signing_secret, "signing_secret")
     ?? __configured_secret(secrets, raw?.secret, "secret")
   if direct != nil && trim(to_string(direct)) != "" {
     return direct
   }
   const metadata_alias = __secret_alias(secrets, raw, "verification_token")
-    ?? __secret_alias(
-    secrets,
-    raw,
-    "signing_secret",
-  )
+    ?? __secret_alias(secrets, raw, "signing_secret")
     ?? __secret_alias(secrets, raw, "secret")
   if metadata_alias != nil && trim(to_string(metadata_alias)) != "" {
     return metadata_alias
@@ -1555,17 +1539,15 @@ fn __signing_secret(secrets: HarnessSecrets, raw) {
   const configured = __configured_secret(
     secrets,
     raw?.config?.verification_token ?? raw?.secrets?.verification_token
-      ?? raw?.metadata?.secrets
-      ?.verification_token,
+      ?? raw?.metadata?.secrets?.verification_token,
     "verification_token",
   )
     ?? __configured_secret(
-    secrets,
-    raw?.config?.signing_secret ?? raw?.secrets?.signing_secret
-      ?? raw?.metadata?.secrets
-      ?.signing_secret,
-    "signing_secret",
-  )
+      secrets,
+      raw?.config?.signing_secret ?? raw?.secrets?.signing_secret
+        ?? raw?.metadata?.secrets?.signing_secret,
+      "signing_secret",
+    )
     ?? __configured_secret(secrets, raw?.config?.secret ?? raw?.secrets?.secret, "secret")
   if configured != nil && trim(to_string(configured)) != "" {
     return configured
@@ -1576,11 +1558,7 @@ fn __signing_secret(secrets: HarnessSecrets, raw) {
     "verification_token",
   )
     ?? __configured_secret(secrets, raw?.metadata?.signing_secret, "signing_secret")
-    ?? __configured_secret(
-    secrets,
-    raw?.metadata?.secret,
-    "secret",
-  )
+    ?? __configured_secret(secrets, raw?.metadata?.secret, "secret")
   if metadata_secret != nil && trim(to_string(metadata_secret)) != "" {
     return metadata_secret
   }
@@ -1588,30 +1566,28 @@ fn __signing_secret(secrets: HarnessSecrets, raw) {
   const from_binding = __configured_secret(
     secrets,
     binding?.verification_token ?? binding?.secrets?.verification_token
-      ?? binding?.config
-      ?.verification_token
+      ?? binding?.config?.verification_token
       ?? binding?.config?.secrets?.verification_token,
     "verification_token",
   )
     ?? __configured_secret(
-    secrets,
-    binding?.signing_secret ?? binding?.secrets?.signing_secret
-      ?? binding?.config?.signing_secret
-      ?? binding?.config?.secrets?.signing_secret,
-    "signing_secret",
-  )
+      secrets,
+      binding?.signing_secret ?? binding?.secrets?.signing_secret
+        ?? binding?.config?.signing_secret
+        ?? binding?.config?.secrets?.signing_secret,
+      "signing_secret",
+    )
     ?? __configured_secret(
-    secrets,
-    binding?.secret ?? binding?.secrets?.secret ?? binding?.config?.secret,
-    "secret",
-  )
+      secrets,
+      binding?.secret ?? binding?.secrets?.secret ?? binding?.config?.secret,
+      "secret",
+    )
   if from_binding != nil && trim(to_string(from_binding)) != "" {
     return from_binding
   }
   const state = __state()
   const from_ctx = state.ctx?.verification_token ?? state.ctx?.signing_secret
-    ?? state.ctx?.secrets
-    ?.verification_token
+    ?? state.ctx?.secrets?.verification_token
     ?? state.ctx?.secrets?.signing_secret
   if from_ctx != nil && trim(to_string(from_ctx)) != "" {
     return to_string(from_ctx)
@@ -1662,9 +1638,7 @@ fn __configured_secret(secrets: HarnessSecrets, value, fallback_name) {
 fn __secret_alias(secrets: HarnessSecrets, raw, name) {
   const metadata = raw?.metadata ?? {}
   const value = metadata?.secret_ids?.get(name) ?? metadata?.config?.secret_ids?.get(name)
-    ?? raw
-    ?.config?.secret_ids
-    ?.get(name)
+    ?? raw?.config?.secret_ids?.get(name)
     ?? raw?.secrets?.secret_ids?.get(name)
   if value == nil || trim(to_string(value)) == "" {
     return nil
@@ -1743,8 +1717,7 @@ fn __normalize_event(event_type, payload, raw) {
   const headers = raw?.headers ?? {}
   const resource_id = __resource_id(payload)
   const entity_type = payload?.entity?.type ?? payload?.page?.object ?? payload?.database?.object
-    ?? payload
-    ?.data_source?.object
+    ?? payload?.data_source?.object
   return {
     provider: NOTION_PROVIDER_ID,
     event: to_string(event_type),
@@ -1761,10 +1734,10 @@ fn __normalize_event(event_type, payload, raw) {
     },
     entity: payload?.entity
       ?? if resource_id == "" {
-      nil
-    } else {
-      {id: resource_id, type: entity_type, parent: payload?.parent}
-    },
+        nil
+      } else {
+        {id: resource_id, type: entity_type, parent: payload?.parent}
+      },
     entity_type: entity_type,
     api_version: payload?.api_version,
     verification_token: payload?.verification_token,
@@ -1823,19 +1796,14 @@ fn __event_headers(raw_headers) {
 
 fn __request_id(headers) {
   return __header(headers, "request-id") ?? __header(headers, "x-request-id")
-    ?? __header(
-    headers,
-    "x-notion-request-id",
-  )
+    ?? __header(headers, "x-notion-request-id")
 }
 
 fn __dedupe_key(event_type, resource_id, raw, payload) {
   const timestamp = payload?.timestamp ?? payload?.occurred_at ?? ""
   if resource_id != nil && resource_id != "" && timestamp != "" {
     return "notion:" + to_string(event_type) + ":" + to_string(resource_id) + ":"
-      + to_string(
-      timestamp,
-    )
+      + to_string(timestamp)
   }
   const request_id = __header(raw?.headers ?? {}, "x-notion-request-id")
   if request_id != nil && request_id != "" {
@@ -1848,16 +1816,14 @@ fn __dedupe_key(event_type, resource_id, raw, payload) {
 fn __resource_id(payload) {
   return to_string(
     payload?.entity?.id ?? payload?.page?.id ?? payload?.database?.id ?? payload?.data_source?.id
-      ?? payload
-      ?.id
+      ?? payload?.id
       ?? "",
   )
 }
 
 fn __parent_id(payload) {
   return payload?.entity?.parent?.id ?? payload?.parent?.id ?? payload?.parent_id
-    ?? payload?.parent
-    ?.database_id
+    ?? payload?.parent?.database_id
     ?? payload?.parent?.data_source_id
     ?? payload?.parent?.page_id
     ?? payload?.page?.parent?.database_id
@@ -1930,8 +1896,7 @@ fn __triage_source_kind(event_type, normalized_payload, raw_payload, task) {
     return "mention"
   }
   const entity_type = normalized_payload?.entity_type ?? raw_payload?.object
-    ?? raw_payload?.entity
-    ?.type
+    ?? raw_payload?.entity?.type
   if entity_type == "page" && task.has_task_metadata {
     return "task"
   }
@@ -2210,8 +2175,7 @@ fn __notion_source_url(kind, id, raw_payload) {
   }
   const fallback_id = if kind == "comment" {
     raw_payload?.parent?.page_id ?? raw_payload?.comment?.parent?.page_id
-      ?? raw_payload?.entity?.parent
-      ?.id
+      ?? raw_payload?.entity?.parent?.id
   } else {
     id
   }
@@ -2227,31 +2191,29 @@ fn __triage_provenance(raw_payload, normalized_payload, source_ref) {
   const comment = __comment_payload(raw_payload)
   const page_id = page?.id
     ?? if normalized_payload?.entity_type == "page" {
-    normalized_payload?.resource_id
-  } else if raw_payload?.entity?.parent?.type == "page" {
-    raw_payload?.entity?.parent?.id
-  } else {
-    nil
-  }
+      normalized_payload?.resource_id
+    } else if raw_payload?.entity?.parent?.type == "page" {
+      raw_payload?.entity?.parent?.id
+    } else {
+      nil
+    }
   const database_id = database?.id
     ?? if normalized_payload?.entity_type == "database"
-    || normalized_payload
-    ?.entity_type
-    == "data_source" {
-    normalized_payload?.resource_id
-  } else {
-    nil
-  }
+      || normalized_payload?.entity_type
+        == "data_source" {
+      normalized_payload?.resource_id
+    } else {
+      nil
+    }
     ?? page?.parent?.database_id
     ?? page?.parent?.data_source_id
     ?? if raw_payload?.entity?.parent?.type == "database"
-    || raw_payload
-    ?.entity?.parent?.type
-    == "data_source" {
-    raw_payload?.entity?.parent?.id
-  } else {
-    nil
-  }
+      || raw_payload?.entity?.parent?.type
+        == "data_source" {
+      raw_payload?.entity?.parent?.id
+    } else {
+      nil
+    }
   return {
     source_ref: source_ref,
     workspace_id: normalized_payload?.workspace_id,
@@ -2355,9 +2317,7 @@ fn __triage_proposed_action(source_kind, task) {
   if source_kind == "task" {
     if task?.due?.start != nil {
       return "Review the task, confirm owner and status, then follow up before "
-        + to_string(
-        task.due.start,
-      )
+        + to_string(task.due.start)
         + "."
     }
     return "Review the task, confirm owner and status, then decide whether to follow up or dismiss."
@@ -2495,20 +2455,14 @@ fn __validate_api_base_url(api_base_url) {
 
 fn __outbound_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
   const raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
-    ?? harness.env.get_or(
-    "NOTION_API_BASE_URL",
-    NOTION_API_BASE_URL,
-  )
+    ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   const api_base_check = __validate_api_base_url(raw_api_base_url)
   if is_err(api_base_check) {
     return api_base_check
   }
   const api_base_url = unwrap(api_base_check)
   const notion_version = args?.notion_version ?? __state().ctx?.notion_version
-    ?? harness.env.get_or(
-    "NOTION_VERSION",
-    NOTION_API_VERSION,
-  )
+    ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   const explicit_api_token = args?.api_token ?? args?.token ?? args?.secrets?.api_token
   if explicit_api_token != nil && trim(to_string(explicit_api_token)) == "" {
     return Err(
@@ -2545,29 +2499,21 @@ fn __outbound_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) 
 
 fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
   const raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
-    ?? harness.env.get_or(
-    "NOTION_API_BASE_URL",
-    NOTION_API_BASE_URL,
-  )
+    ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   const api_base_check = __validate_api_base_url(raw_api_base_url)
   if is_err(api_base_check) {
     return api_base_check
   }
   const api_base_url = unwrap(api_base_check)
   const notion_version = args?.notion_version ?? __state().ctx?.notion_version
-    ?? harness.env.get_or(
-    "NOTION_VERSION",
-    NOTION_API_VERSION,
-  )
+    ?? harness.env.get_or("NOTION_VERSION", NOTION_API_VERSION)
   const client_id = args?.client_id ?? args?.oauth?.client_id ?? args?.secrets?.client_id
-    ?? __state()
-    .ctx?.client_id
+    ?? __state().ctx?.client_id
     ?? __state().ctx?.oauth?.client_id
     ?? __state().ctx?.secrets?.client_id
     ?? harness.env.get("NOTION_CLIENT_ID")
   const explicit_client_secret = args?.client_secret ?? args?.oauth?.client_secret
-    ?? args?.secrets
-    ?.client_secret
+    ?? args?.secrets?.client_secret
     ?? __state().ctx?.client_secret
     ?? __state().ctx?.oauth?.client_secret
     ?? __state().ctx?.secrets?.client_secret
@@ -2578,10 +2524,8 @@ fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
   )
     ?? harness.env.get("NOTION_CLIENT_SECRET")
   if client_id == nil || trim(to_string(client_id)) == "" || client_secret == nil
-    || trim(
-    to_string(client_secret),
-  )
-    == "" {
+    || trim(to_string(client_secret))
+      == "" {
     return Err(
       {
         code: "missing_oauth_client_credentials",
@@ -2742,9 +2686,7 @@ fn __notion_request(net: HarnessNet, method, url, body, cfg) {
       code: payload?.code ?? "notion_error",
       message: payload?.message
         ?? ("Notion API request failed with status "
-        + to_string(
-        http_response.status,
-      )),
+          + to_string(http_response.status)),
       request_id: __response_request_id(response_headers),
     }
     const auth_scope_failure = __auth_scope_failure(http_response.status, err.code)
@@ -2803,10 +2745,7 @@ fn __with_auth_scope_failure(result) {
 
 fn __response_request_id(headers) {
   return __header(headers ?? {}, "x-request-id") ?? __header(headers ?? {}, "request-id")
-    ?? __header(
-    headers ?? {},
-    "x-notion-request-id",
-  )
+    ?? __header(headers ?? {}, "x-notion-request-id")
 }
 
 fn __sdk_error(error) {
@@ -2893,8 +2832,7 @@ fn __cursor_high_water(cursor, high_water_mark) {
     return cursor
   }
   return cursor.get(high_water_mark) ?? cursor?.after ?? cursor?.high_water ?? cursor?.last_seen
-    ?? cursor
-    ?.last_edited_time
+    ?? cursor?.last_edited_time
 }
 
 fn __advance_cursor(cursor, high_water_mark, max_seen) {
@@ -2970,10 +2908,10 @@ fn __normalize_poll_binding(binding) {
   const poll = binding?.poll ?? binding?.config?.poll ?? binding?.source ?? {}
   const resource = poll?.resource
     ?? if poll?.database_id != nil {
-    "database"
-  } else {
-    "data_source"
-  }
+      "database"
+    } else {
+      "data_source"
+    }
   if resource != "data_source" && resource != "database" {
     return __err(
       "activation",
@@ -2996,37 +2934,33 @@ fn __normalize_poll_binding(binding) {
   return Ok(
     binding
       + {
-      binding_id: binding_id,
-      resource: resource,
-      resource_id: to_string(resource_id),
-      high_water_mark: poll?.high_water_mark ?? "last_edited_time",
-      page_size: if page_size < 1 {
-        1
-      } else if page_size > 100 {
-        100
-      } else {
-        page_size
+        binding_id: binding_id,
+        resource: resource,
+        resource_id: to_string(resource_id),
+        high_water_mark: poll?.high_water_mark ?? "last_edited_time",
+        page_size: if page_size < 1 {
+          1
+        } else if page_size > 100 {
+          100
+        } else {
+          page_size
+        },
+        filter: poll?.filter,
+        sorts: poll?.sorts ?? [],
+        max_batch_size: poll?.max_batch_size ?? binding?.max_batch_size
+          ?? binding?.config?.max_batch_size,
+        state_key: poll?.state_key ?? poll?.cursor_state_key ?? binding?.state_key
+          ?? binding?.config?.state_key,
+        api_base_url: binding?.api_base_url ?? binding?.config?.api_base_url ?? poll?.api_base_url,
+        api_token: binding?.api_token ?? binding?.token ?? binding?.secrets?.api_token
+          ?? binding?.config?.api_token
+          ?? binding?.config?.secrets?.api_token
+          ?? poll?.api_token
+          ?? poll?.token
+          ?? poll?.secrets?.api_token,
+        notion_version: binding?.notion_version ?? binding?.config?.notion_version
+          ?? poll?.notion_version,
       },
-      filter: poll?.filter,
-      sorts: poll?.sorts ?? [],
-      max_batch_size: poll?.max_batch_size ?? binding?.max_batch_size
-        ?? binding?.config
-        ?.max_batch_size,
-      state_key: poll?.state_key ?? poll?.cursor_state_key ?? binding?.state_key
-        ?? binding?.config
-        ?.state_key,
-      api_base_url: binding?.api_base_url ?? binding?.config?.api_base_url ?? poll?.api_base_url,
-      api_token: binding?.api_token ?? binding?.token ?? binding?.secrets?.api_token
-        ?? binding?.config
-        ?.api_token
-        ?? binding?.config?.secrets?.api_token
-        ?? poll?.api_token
-        ?? poll?.token
-        ?? poll?.secrets?.api_token,
-      notion_version: binding?.notion_version ?? binding?.config?.notion_version
-        ?? poll
-        ?.notion_version,
-    },
   )
 }
 
@@ -3038,9 +2972,7 @@ fn __query_pages_since(harness: Harness, binding, high_water) {
   }
   if high_water != nil {
     filters = filters
-      + [
-      {timestamp: binding.high_water_mark, [binding.high_water_mark]: {after: high_water}},
-    ]
+      + [{timestamp: binding.high_water_mark, [binding.high_water_mark]: {after: high_water}}]
   }
   const filter = if len(filters) == 0 {
     nil
