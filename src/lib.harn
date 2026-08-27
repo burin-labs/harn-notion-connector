@@ -282,7 +282,7 @@ pub fn method_capabilities() {
 }
 
 /** Initialize connector state with orchestrator context. */
-pub fn init(harness: Harness, ctx = nil) {
+pub fn init(harness: Harness, ctx: any = nil) {
   const next = __default_state()
     + {
       initialized: true,
@@ -297,7 +297,7 @@ pub fn init(harness: Harness, ctx = nil) {
 }
 
 /** Activate webhook and poll bindings, storing normalized binding config. */
-pub fn activate(harness: Harness, bindings = []) {
+pub fn activate(harness: Harness, bindings: any = []) {
   let webhook_bindings = {}
   let poll_bindings = {}
   let seen_paths = {}
@@ -354,7 +354,7 @@ pub fn shutdown(harness: Harness) {
  * retained request body from raw.raw_body or raw.body_text and rejects callers
  * that only provide a parsed body.
  */
-pub fn normalize_inbound(harness: Harness, raw) {
+pub fn normalize_inbound(harness: Harness, raw: any) {
   const body_text = __body_text(raw)
   if is_err(body_text) {
     return __reject_err(unwrap_err(body_text))
@@ -419,7 +419,7 @@ const NOTION_VERIFICATION_TOKEN_MAX_LEN = 512
  */
 const NOTION_REPLAY_WINDOW_SECONDS = 300
 
-fn __notion_freshness_check(clock: HarnessClock, payload) {
+fn __notion_freshness_check(clock: HarnessClock, payload: any) {
   const raw_ts = payload?.timestamp
   if raw_ts == nil {
     return Ok(true)
@@ -469,7 +469,7 @@ fn __notion_freshness_check(clock: HarnessClock, payload) {
 
 @complexity(allow)
 /** Dispatch a supported Notion API method with explicit method-to-path mapping. */
-pub fn call(harness: Harness, method, args = {}) {
+pub fn call(harness: Harness, method: any, args: any = {}) {
   if !contains(NOTION_OUTBOUND_METHODS, method) {
     return __err(
       "method_not_found",
@@ -1088,7 +1088,10 @@ pub fn call(harness: Harness, method, args = {}) {
 }
 
 /** Build a deterministic Notion export descriptor for a page, block tree, or file URL. */
-pub fn artifact_export_request(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args = {}) {
+pub fn artifact_export_request(
+  harness: {env: HarnessEnv, secrets: HarnessSecrets},
+  args: any = {},
+) {
   const cfg = __outbound_config(harness, args ?? {})
   if is_err(cfg) {
     return cfg
@@ -1182,7 +1185,10 @@ pub fn artifact_export_request(harness: {env: HarnessEnv, secrets: HarnessSecret
 }
 
 /** Build deterministic Notion import descriptors for generated page/block/file artifacts. */
-pub fn artifact_import_request(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args = {}) {
+pub fn artifact_import_request(
+  harness: {env: HarnessEnv, secrets: HarnessSecrets},
+  args: any = {},
+) {
   const cfg = __outbound_config(harness, args ?? {})
   if is_err(cfg) {
     return cfg
@@ -1333,7 +1339,7 @@ pub fn artifact_import_request(harness: {env: HarnessEnv, secrets: HarnessSecret
 
 @complexity(allow)
 /** Perform one orchestrator-driven polling tick and return normalized events plus durable state. */
-pub fn poll_tick(harness: Harness, ctx = nil) {
+pub fn poll_tick(harness: Harness, ctx: any = nil) {
   const binding_source = ctx?.binding ?? ctx
   if binding_source == nil {
     return {events: [], cursor: nil, state: nil}
@@ -1408,11 +1414,11 @@ fn __set_state(state: NotionConnectorState) {
   return state
 }
 
-fn __err(code, message) {
+fn __err(code: any, message: any) {
   return Err({code: code, message: message})
 }
 
-fn __auth_scope_failure(status, code) {
+fn __auth_scope_failure(status: any, code: any) {
   const normalized_code = to_string(code ?? "")
   if normalized_code == "missing_api_token" {
     return {
@@ -1446,7 +1452,7 @@ fn __auth_scope_failure(status, code) {
   return nil
 }
 
-fn __reject(status, code, message) {
+fn __reject(status: any, code: any, message: any) {
   return {
     type: "reject",
     reject: {
@@ -1457,7 +1463,7 @@ fn __reject(status, code, message) {
   }
 }
 
-fn __reject_err(err) {
+fn __reject_err(err: any) {
   const code = err?.code ?? "rejected"
   const message = err?.message ?? "request rejected"
   const status = if code == "missing_signature" || code == "invalid_signature"
@@ -1471,7 +1477,7 @@ fn __reject_err(err) {
   return __reject(status, code, message)
 }
 
-fn __body_text(raw) {
+fn __body_text(raw: any) {
   if raw?.raw_body != nil {
     const decoded = try {
       bytes_to_string(raw.raw_body)
@@ -1492,7 +1498,7 @@ fn __body_text(raw) {
   )
 }
 
-fn __header(headers, name) {
+fn __header(headers: any, name: any) {
   const wanted = lowercase(name)
   for entry in (headers ?? {}).entries() {
     if lowercase(trim(to_string(entry.key))) == wanted {
@@ -1502,7 +1508,7 @@ fn __header(headers, name) {
   return nil
 }
 
-fn __strip_prefix(value, prefix) {
+fn __strip_prefix(value: any, prefix: any) {
   const text = to_string(value)
   if text.starts_with(prefix) {
     return text[len(prefix):len(text)]
@@ -1510,7 +1516,7 @@ fn __strip_prefix(value, prefix) {
   return text
 }
 
-fn __binding_for_raw(raw) {
+fn __binding_for_raw(raw: any) {
   const bindings = __state().webhook_bindings ?? {}
   const binding_id = raw?.metadata?.binding_id ?? raw?.binding_id
   if binding_id != nil {
@@ -1523,7 +1529,7 @@ fn __binding_for_raw(raw) {
   return nil
 }
 
-fn __signing_secret(secrets: HarnessSecrets, raw) {
+fn __signing_secret(secrets: HarnessSecrets, raw: any) {
   const direct = __configured_secret(secrets, raw?.verification_token, "verification_token")
     ?? __configured_secret(secrets, raw?.signing_secret, "signing_secret")
     ?? __configured_secret(secrets, raw?.secret, "secret")
@@ -1601,7 +1607,7 @@ fn __signing_secret(secrets: HarnessSecrets, raw) {
  * `othertenant/api-token` (or `othertenant.api-token`) and cross-read
  * secrets if the secret backend doesn't enforce isolation.
  */
-fn __is_allowed_notion_secret_id(value) {
+fn __is_allowed_notion_secret_id(value: any) {
   const raw = trim(to_string(value ?? ""))
   if raw == "" {
     return false
@@ -1609,7 +1615,7 @@ fn __is_allowed_notion_secret_id(value) {
   return raw.starts_with(NOTION_PROVIDER_ID + "/")
 }
 
-fn __configured_secret(secrets: HarnessSecrets, value, fallback_name) {
+fn __configured_secret(secrets: HarnessSecrets, value: any, fallback_name: any) {
   if value == nil || trim(to_string(value)) == "" {
     return nil
   }
@@ -1635,7 +1641,7 @@ fn __configured_secret(secrets: HarnessSecrets, value, fallback_name) {
   return text
 }
 
-fn __secret_alias(secrets: HarnessSecrets, raw, name) {
+fn __secret_alias(secrets: HarnessSecrets, raw: any, name: any) {
   const metadata = raw?.metadata ?? {}
   const value = metadata?.secret_ids?.get(name) ?? metadata?.config?.secret_ids?.get(name)
     ?? raw?.config?.secret_ids?.get(name)
@@ -1653,7 +1659,7 @@ fn __secret_alias(secrets: HarnessSecrets, raw, name) {
   )
 }
 
-fn __secret_id_candidate(value, fallback_name) {
+fn __secret_id_candidate(value: any, fallback_name: any) {
   if value == nil || trim(to_string(value)) == "" {
     return nil
   }
@@ -1673,7 +1679,7 @@ fn __secret_id_candidate(value, fallback_name) {
   return nil
 }
 
-fn __secret_get_candidates(secrets: HarnessSecrets, secret_ids) {
+fn __secret_get_candidates(secrets: HarnessSecrets, secret_ids: any) {
   for secret_id in secret_ids ?? [] {
     const secret = __secret_get_optional(secrets, secret_id)
     if secret != nil && trim(to_string(secret)) != "" {
@@ -1683,7 +1689,7 @@ fn __secret_get_candidates(secrets: HarnessSecrets, secret_ids) {
   return nil
 }
 
-fn __secret_get_optional(secrets: HarnessSecrets, secret_id) {
+fn __secret_get_optional(secrets: HarnessSecrets, secret_id: any) {
   if secret_id == nil || trim(to_string(secret_id)) == "" {
     return nil
   }
@@ -1696,7 +1702,7 @@ fn __secret_get_optional(secrets: HarnessSecrets, secret_id) {
   return to_string(unwrap(resolved))
 }
 
-fn __verify_notion_signature(secrets: HarnessSecrets, raw, headers, body_text) {
+fn __verify_notion_signature(secrets: HarnessSecrets, raw: any, headers: any, body_text: any) {
   const signature = __header(headers, "x-notion-signature")
   if signature == nil || signature == "" {
     return __err("missing_signature", "missing x-notion-signature header")
@@ -1713,7 +1719,7 @@ fn __verify_notion_signature(secrets: HarnessSecrets, raw, headers, body_text) {
   return Ok(true)
 }
 
-fn __normalize_event(event_type, payload, raw) {
+fn __normalize_event(event_type: any, payload: any, raw: any) {
   const headers = raw?.headers ?? {}
   const resource_id = __resource_id(payload)
   const entity_type = payload?.entity?.type ?? payload?.page?.object ?? payload?.database?.object
@@ -1750,7 +1756,7 @@ fn __normalize_event(event_type, payload, raw) {
   }
 }
 
-fn __build_event(event_type, payload, raw, signature_status) {
+fn __build_event(event_type: any, payload: any, raw: any, signature_status: any) {
   let normalized_payload = __normalize_event(event_type, payload, raw)
   // F5: only surface verification_token on the dedicated unsigned-verification
   // event kind. Strip it from generic signed events so attacker-supplied
@@ -1773,7 +1779,7 @@ fn __build_event(event_type, payload, raw, signature_status) {
   }
 }
 
-fn __event_headers(raw_headers) {
+fn __event_headers(raw_headers: any) {
   let headers = {}
   const signature = __header(raw_headers, "x-notion-signature")
   if signature != nil {
@@ -1794,12 +1800,12 @@ fn __event_headers(raw_headers) {
   return headers
 }
 
-fn __request_id(headers) {
+fn __request_id(headers: any) {
   return __header(headers, "request-id") ?? __header(headers, "x-request-id")
     ?? __header(headers, "x-notion-request-id")
 }
 
-fn __dedupe_key(event_type, resource_id, raw, payload) {
+fn __dedupe_key(event_type: any, resource_id: any, raw: any, payload: any) {
   const timestamp = payload?.timestamp ?? payload?.occurred_at ?? ""
   if resource_id != nil && resource_id != "" && timestamp != "" {
     return "notion:" + to_string(event_type) + ":" + to_string(resource_id) + ":"
@@ -1813,7 +1819,7 @@ fn __dedupe_key(event_type, resource_id, raw, payload) {
     + to_string(timestamp)
 }
 
-fn __resource_id(payload) {
+fn __resource_id(payload: any) {
   return to_string(
     payload?.entity?.id ?? payload?.page?.id ?? payload?.database?.id ?? payload?.data_source?.id
       ?? payload?.id
@@ -1821,7 +1827,7 @@ fn __resource_id(payload) {
   )
 }
 
-fn __parent_id(payload) {
+fn __parent_id(payload: any) {
   return payload?.entity?.parent?.id ?? payload?.parent?.id ?? payload?.parent_id
     ?? payload?.parent?.database_id
     ?? payload?.parent?.data_source_id
@@ -1832,14 +1838,14 @@ fn __parent_id(payload) {
     ?? payload?.database?.parent?.workspace
 }
 
-fn __actor(payload) {
+fn __actor(payload: any) {
   const actor = payload?.actor ?? payload?.user ?? payload?.performed_by ?? payload?.last_edited_by
     ?? {}
   return {id: actor?.id, name: actor?.name ?? actor?.person?.email ?? actor?.bot?.owner?.user?.name}
 }
 
 @complexity(allow)
-fn __triage_event(event_type, normalized_payload, raw_payload, dedupe_key) {
+fn __triage_event(event_type: any, normalized_payload: any, raw_payload: any, dedupe_key: any) {
   const task = __triage_task_metadata(raw_payload)
   const source_kind = __triage_source_kind(event_type, normalized_payload, raw_payload, task)
   const physical_kind = __triage_physical_kind(source_kind, normalized_payload, raw_payload)
@@ -1887,7 +1893,7 @@ fn __triage_event(event_type, normalized_payload, raw_payload, dedupe_key) {
   }
 }
 
-fn __triage_source_kind(event_type, normalized_payload, raw_payload, task) {
+fn __triage_source_kind(event_type: any, normalized_payload: any, raw_payload: any, task: any) {
   const lowered_event = lowercase(to_string(event_type))
   if lowered_event.contains("comment") {
     return "comment"
@@ -1909,14 +1915,14 @@ fn __triage_source_kind(event_type, normalized_payload, raw_payload, task) {
   return "page"
 }
 
-fn __triage_physical_kind(source_kind, normalized_payload, raw_payload) {
+fn __triage_physical_kind(source_kind: any, normalized_payload: any, raw_payload: any) {
   if source_kind == "task" || source_kind == "mention" {
     return "page"
   }
   return normalized_payload?.entity_type ?? raw_payload?.object ?? source_kind
 }
 
-fn __triage_change_kind(event_type) {
+fn __triage_change_kind(event_type: any) {
   const lowered = lowercase(to_string(event_type))
   if lowered.contains("created") {
     return "created"
@@ -1933,14 +1939,14 @@ fn __triage_change_kind(event_type) {
   return "event"
 }
 
-fn __triage_actors(actor) {
+fn __triage_actors(actor: any) {
   if actor == nil || (actor?.id == nil && actor?.name == nil) {
     return []
   }
   return [{id: actor?.id, name: actor?.name}]
 }
 
-fn __triage_title(raw_payload, normalized_payload) {
+fn __triage_title(raw_payload: any, normalized_payload: any) {
   const page = __page_payload(raw_payload)
   const page_title = __notion_object_title(page)
   if page_title != nil && page_title != "" {
@@ -1964,7 +1970,7 @@ fn __triage_title(raw_payload, normalized_payload) {
   return normalized_payload?.resource_id
 }
 
-fn __page_payload(raw_payload) {
+fn __page_payload(raw_payload: any) {
   if raw_payload?.page != nil {
     return raw_payload.page
   }
@@ -1974,7 +1980,7 @@ fn __page_payload(raw_payload) {
   return nil
 }
 
-fn __database_payload(raw_payload) {
+fn __database_payload(raw_payload: any) {
   if raw_payload?.database != nil {
     return raw_payload.database
   }
@@ -1987,7 +1993,7 @@ fn __database_payload(raw_payload) {
   return nil
 }
 
-fn __comment_payload(raw_payload) {
+fn __comment_payload(raw_payload: any) {
   if raw_payload?.comment != nil {
     return raw_payload.comment
   }
@@ -1997,7 +2003,7 @@ fn __comment_payload(raw_payload) {
   return nil
 }
 
-fn __notion_object_title(object) {
+fn __notion_object_title(object: any) {
   const from_properties = __title_from_properties(object?.properties ?? {})
   if from_properties != nil && from_properties != "" {
     return from_properties
@@ -2015,7 +2021,7 @@ fn __notion_object_title(object) {
   return nil
 }
 
-fn __title_from_properties(properties) {
+fn __title_from_properties(properties: any) {
   for entry in (properties ?? {}).entries() {
     const property = entry.value
     if property?.type == "title" || property?.title != nil {
@@ -2028,7 +2034,7 @@ fn __title_from_properties(properties) {
   return nil
 }
 
-fn __rich_text_plain(value) {
+fn __rich_text_plain(value: any) {
   if value == nil {
     return nil
   }
@@ -2048,7 +2054,7 @@ fn __rich_text_plain(value) {
 }
 
 @complexity(allow)
-fn __triage_task_metadata(raw_payload) {
+fn __triage_task_metadata(raw_payload: any) {
   const page = __page_payload(raw_payload) ?? raw_payload
   const properties = page?.properties ?? {}
   let status = nil
@@ -2101,7 +2107,7 @@ fn __triage_task_metadata(raw_payload) {
   }
 }
 
-fn __people(values) {
+fn __people(values: any) {
   let people = []
   for person in values ?? [] {
     if person == nil {
@@ -2113,14 +2119,14 @@ fn __people(values) {
   return people
 }
 
-fn __notion_ref(kind, id) {
+fn __notion_ref(kind: any, id: any) {
   if id == nil || trim(to_string(id)) == "" {
     return nil
   }
   return "notion://" + to_string(kind) + "/" + to_string(id)
 }
 
-fn __mime_type_from_name(name) {
+fn __mime_type_from_name(name: any) {
   const text = lowercase(to_string(name ?? ""))
   if text.ends_with(".pdf") {
     return "application/pdf"
@@ -2146,13 +2152,13 @@ fn __mime_type_from_name(name) {
   return "application/octet-stream"
 }
 
-fn __title_properties(title) {
+fn __title_properties(title: any) {
   return {
     title: {title: [{type: "text", text: {content: to_string(title ?? "Imported artifact")}}]},
   }
 }
 
-fn __artifact_media(args, default_mime_type) {
+fn __artifact_media(args: any, default_mime_type: any) {
   return {
     uri: args?.uri ?? args?.path,
     mime_type: args?.mime_type ?? args?.content_type ?? default_mime_type,
@@ -2161,7 +2167,7 @@ fn __artifact_media(args, default_mime_type) {
   }
 }
 
-fn __notion_source_url(kind, id, raw_payload) {
+fn __notion_source_url(kind: any, id: any, raw_payload: any) {
   const object = if kind == "page" {
     __page_payload(raw_payload)
   } else if kind == "database" || kind == "data_source" {
@@ -2185,7 +2191,7 @@ fn __notion_source_url(kind, id, raw_payload) {
   return "https://www.notion.so/" + to_string(fallback_id).replace("-", "")
 }
 
-fn __triage_provenance(raw_payload, normalized_payload, source_ref) {
+fn __triage_provenance(raw_payload: any, normalized_payload: any, source_ref: any) {
   const page = __page_payload(raw_payload)
   const database = __database_payload(raw_payload)
   const comment = __comment_payload(raw_payload)
@@ -2249,7 +2255,7 @@ fn __triage_provenance(raw_payload, normalized_payload, source_ref) {
   }
 }
 
-fn __database_schema(database) {
+fn __database_schema(database: any) {
   if database?.properties == nil {
     return nil
   }
@@ -2260,7 +2266,7 @@ fn __database_schema(database) {
   return {properties: fields}
 }
 
-fn __triage_related_refs(source_ref, provenance) {
+fn __triage_related_refs(source_ref: any, provenance: any) {
   let refs = []
   refs = __append_ref(refs, source_ref)
   refs = __append_ref(refs, provenance?.page?.ref)
@@ -2269,14 +2275,14 @@ fn __triage_related_refs(source_ref, provenance) {
   return refs
 }
 
-fn __append_ref(refs, ref) {
+fn __append_ref(refs: any, ref: any) {
   if ref == nil || ref == "" || contains(refs, ref) {
     return refs
   }
   return refs + [ref]
 }
 
-fn __triage_summary(source_kind, event_type, title, source_id) {
+fn __triage_summary(source_kind: any, event_type: any, title: any, source_id: any) {
   const label = title ?? source_id ?? "untitled"
   if source_kind == "task" {
     return "Notion task updated: " + to_string(label)
@@ -2290,7 +2296,7 @@ fn __triage_summary(source_kind, event_type, title, source_id) {
   return "Notion " + to_string(event_type) + ": " + to_string(label)
 }
 
-fn __triage_why(source_kind, task, provenance) {
+fn __triage_why(source_kind: any, task: any, provenance: any) {
   if source_kind == "task" {
     const status = if task?.status == nil {
       ""
@@ -2313,7 +2319,7 @@ fn __triage_why(source_kind, task, provenance) {
   return "The event has a stable Notion source reference that can be rendered in an inbox."
 }
 
-fn __triage_proposed_action(source_kind, task) {
+fn __triage_proposed_action(source_kind: any, task: any) {
   if source_kind == "task" {
     if task?.due?.start != nil {
       return "Review the task, confirm owner and status, then follow up before "
@@ -2328,7 +2334,7 @@ fn __triage_proposed_action(source_kind, task) {
   return "Open the Notion source, review the change, then dismiss or snooze the inbox item."
 }
 
-fn __triage_urgency(task) {
+fn __triage_urgency(task: any) {
   const status = lowercase(to_string(task?.status ?? ""))
   if status.contains("blocked") || status.contains("urgent") {
     return "high"
@@ -2339,7 +2345,7 @@ fn __triage_urgency(task) {
   return "low"
 }
 
-fn __triage_priority(task) {
+fn __triage_priority(task: any) {
   const urgency = __triage_urgency(task)
   if urgency == "high" {
     return 80
@@ -2350,7 +2356,7 @@ fn __triage_priority(task) {
   return 40
 }
 
-fn __triage_confidence(title, source_url, task) {
+fn __triage_confidence(title: any, source_url: any, task: any) {
   if title != nil && source_url != nil && task?.has_task_metadata {
     return 0.95
   }
@@ -2363,7 +2369,7 @@ fn __triage_confidence(title, source_url, task) {
   return 0.7
 }
 
-fn __triage_action_intents(source_kind, source_id) {
+fn __triage_action_intents(source_kind: any, source_id: any) {
   return [
     {kind: "dismiss", label: "Dismiss", side_effect: "local", requires_approval: false},
     {kind: "snooze", label: "Snooze", side_effect: "local", requires_approval: false},
@@ -2386,7 +2392,7 @@ fn __triage_action_intents(source_kind, source_id) {
   ]
 }
 
-fn __extract_host(url) {
+fn __extract_host(url: any) {
   const trimmed = trim(to_string(url ?? ""))
   if trimmed == "" {
     return nil
@@ -2425,7 +2431,7 @@ fn __extract_host(url) {
  * otherwise so the caller never ships a Notion API token to an
  * attacker-controlled host.
  */
-fn __validate_api_base_url(api_base_url) {
+fn __validate_api_base_url(api_base_url: any) {
   if api_base_url == nil {
     return Ok(NOTION_API_BASE_URL)
   }
@@ -2453,7 +2459,7 @@ fn __validate_api_base_url(api_base_url) {
   return Ok(text)
 }
 
-fn __outbound_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
+fn __outbound_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args: any) {
   const raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   const api_base_check = __validate_api_base_url(raw_api_base_url)
@@ -2497,7 +2503,7 @@ fn __outbound_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) 
   )
 }
 
-fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
+fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args: any) {
   const raw_api_base_url = args?.api_base_url ?? __state().ctx?.api_base_url
     ?? harness.env.get_or("NOTION_API_BASE_URL", NOTION_API_BASE_URL)
   const api_base_check = __validate_api_base_url(raw_api_base_url)
@@ -2551,7 +2557,7 @@ fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args) {
  * only env and secrets, so it keeps the narrow record and is attenuated here
  * rather than widened to match.
  */
-fn __oauth_call(harness: Harness, method, args) {
+fn __oauth_call(harness: Harness, method: any, args: any) {
   const config = __oauth_config({env: harness.env, secrets: harness.secrets}, args ?? {})
   if is_err(config) {
     return config
@@ -2594,7 +2600,7 @@ fn __oauth_call(harness: Harness, method, args) {
   )
 }
 
-fn __call_body(args, remove_fields = []) {
+fn __call_body(args: any, remove_fields: any = []) {
   const extra = remove_fields ?? []
   const skip = NOTION_CONTROL_ARG_FIELDS + extra
   let body = {}
@@ -2606,7 +2612,7 @@ fn __call_body(args, remove_fields = []) {
   return body
 }
 
-fn __oauth_call_body(args) {
+fn __oauth_call_body(args: any) {
   let body = {}
   for entry in (args ?? {}).entries() {
     const key = to_string(entry.key)
@@ -2617,12 +2623,12 @@ fn __oauth_call_body(args) {
   return body
 }
 
-fn __requires_api_call_approval(method) {
+fn __requires_api_call_approval(method: any) {
   const normalized = uppercase(to_string(method ?? "GET"))
   return normalized != "GET" && normalized != "HEAD" && normalized != "OPTIONS"
 }
 
-fn __required_id(args, field, method) {
+fn __required_id(args: any, field: any, method: any) {
   const value = args.get(field) ?? args?.id
   if value == nil || trim(to_string(value)) == "" {
     return __err("invalid_args", method + " requires " + field)
@@ -2630,7 +2636,7 @@ fn __required_id(args, field, method) {
   return Ok(value)
 }
 
-fn __notion_api_url(api_base_url, path) {
+fn __notion_api_url(api_base_url: any, path: any) {
   const base = trim(to_string(api_base_url))
   const clean_base = if base.ends_with("/") {
     base[0:len(base) - 1]
@@ -2645,7 +2651,7 @@ fn __notion_api_url(api_base_url, path) {
   return clean_base + clean_path
 }
 
-fn __notion_headers(cfg) {
+fn __notion_headers(cfg: any) {
   return {
     Authorization: "Bearer " + cfg.api_token,
     "Content-Type": "application/json",
@@ -2653,7 +2659,7 @@ fn __notion_headers(cfg) {
   }
 }
 
-fn __notion_request(net: HarnessNet, method, url, body, cfg) {
+fn __notion_request(net: HarnessNet, method: any, url: any, body: any, cfg: any) {
   const response = try {
     net.request(
       method,
@@ -2698,19 +2704,19 @@ fn __notion_request(net: HarnessNet, method, url, body, cfg) {
   return payload
 }
 
-fn __sdk_client(cfg) {
+fn __sdk_client(cfg: any) {
   let client = new_client(__sdk_base_url(cfg.api_base_url), cfg.api_token)
   client.extra_headers = {"Notion-Version": cfg.notion_version}
   return client
 }
 
-fn __oauth_client(cfg) {
+fn __oauth_client(cfg: any) {
   let client = new_client(__sdk_base_url(cfg.api_base_url), "", cfg.client_id, cfg.client_secret)
   client.extra_headers = {"Notion-Version": cfg.notion_version}
   return client
 }
 
-fn __sdk_base_url(api_base_url) {
+fn __sdk_base_url(api_base_url: any) {
   const base = trim(to_string(api_base_url))
   if base.ends_with("/v1") {
     return base[0:len(base) - 3]
@@ -2724,14 +2730,14 @@ fn __sdk_base_url(api_base_url) {
   return base
 }
 
-fn __sdk_result(result) {
+fn __sdk_result(result: any) {
   if is_ok(result) {
     return unwrap(result)
   }
   return __with_auth_scope_failure(__sdk_error(unwrap_err(result)))
 }
 
-fn __with_auth_scope_failure(result) {
+fn __with_auth_scope_failure(result: any) {
   if !is_err(result) {
     return result
   }
@@ -2743,12 +2749,12 @@ fn __with_auth_scope_failure(result) {
   return Err(err)
 }
 
-fn __response_request_id(headers) {
+fn __response_request_id(headers: any) {
   return __header(headers ?? {}, "x-request-id") ?? __header(headers ?? {}, "request-id")
     ?? __header(headers ?? {}, "x-notion-request-id")
 }
 
-fn __sdk_error(error) {
+fn __sdk_error(error: any) {
   if type_of(error) == "dict" {
     const decoded = try {
       json_parse(error?.body ?? "{}")
@@ -2816,7 +2822,7 @@ fn __sdk_error(error) {
   return Err(err)
 }
 
-fn __poll_state(state) {
+fn __poll_state(state: any) {
   return if state == nil {
     {poll_cache: {}}
   } else {
@@ -2824,7 +2830,7 @@ fn __poll_state(state) {
   }
 }
 
-fn __cursor_high_water(cursor, high_water_mark) {
+fn __cursor_high_water(cursor: any, high_water_mark: any) {
   if cursor == nil {
     return nil
   }
@@ -2835,7 +2841,7 @@ fn __cursor_high_water(cursor, high_water_mark) {
     ?? cursor?.last_edited_time
 }
 
-fn __advance_cursor(cursor, high_water_mark, max_seen) {
+fn __advance_cursor(cursor: any, high_water_mark: any, max_seen: any) {
   if max_seen == nil {
     return cursor
   }
@@ -2849,7 +2855,7 @@ fn __advance_cursor(cursor, high_water_mark, max_seen) {
   return next
 }
 
-fn __poll_max_batch_size(ctx, binding) {
+fn __poll_max_batch_size(ctx: any, binding: any) {
   const value = ctx?.max_batch_size ?? binding?.max_batch_size
   if value == nil {
     return nil
@@ -2860,7 +2866,7 @@ fn __poll_max_batch_size(ctx, binding) {
   return value
 }
 
-fn __build_poll_event(binding, page, previous_snapshot) {
+fn __build_poll_event(binding: any, page: any, previous_snapshot: any) {
   const event_type = "page.content_updated"
   const last_edited_time = to_string(page.last_edited_time)
   let payload = {
@@ -2903,7 +2909,7 @@ fn __build_poll_event(binding, page, previous_snapshot) {
   }
 }
 
-fn __normalize_poll_binding(binding) {
+fn __normalize_poll_binding(binding: any) {
   const binding_id = binding?.binding_id ?? binding?.id ?? "poll"
   const poll = binding?.poll ?? binding?.config?.poll ?? binding?.source ?? {}
   const resource = poll?.resource
@@ -2965,7 +2971,7 @@ fn __normalize_poll_binding(binding) {
 }
 
 @complexity(allow)
-fn __query_pages_since(harness: Harness, binding, high_water) {
+fn __query_pages_since(harness: Harness, binding: any, high_water: any) {
   let filters = []
   if binding?.filter != nil {
     filters = filters + [binding.filter]

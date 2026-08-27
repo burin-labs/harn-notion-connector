@@ -1,7 +1,7 @@
 import { activate, init, kinds, payload_schema, provider_id, shutdown } from "../src/lib"
 
 /** Build a Notion HMAC signature header for fixture request bodies. */
-pub fn notion_headers(secret, body) {
+pub fn notion_headers(secret: any, body: any) {
   return {"x-notion-signature": "sha256=" + hmac_sha256(secret, body)}
 }
 
@@ -10,7 +10,7 @@ pub fn notion_headers(secret, body) {
  * connector's F6 freshness window (300s). Re-emits canonical JSON via
  * `json_stringify` so callers can sign over the refreshed bytes.
  */
-pub fn refresh_body_timestamp(clock: HarnessClock, body) {
+pub fn refresh_body_timestamp(clock: HarnessClock, body: any) {
   const parsed = try {
     json_parse(body)
   }
@@ -26,7 +26,7 @@ pub fn refresh_body_timestamp(clock: HarnessClock, body) {
 }
 
 /** Build a signed raw inbound webhook envelope for normalize_inbound tests. */
-pub fn signed_raw(clock: HarnessClock, secret, body, extra = nil) {
+pub fn signed_raw(clock: HarnessClock, secret: any, body: any, extra: any = nil) {
   const fresh = refresh_body_timestamp(clock, body)
   return {verification_token: secret, body_text: fresh, headers: notion_headers(secret, fresh)}
     + (extra
@@ -34,7 +34,7 @@ pub fn signed_raw(clock: HarnessClock, secret, body, extra = nil) {
 }
 
 /** Read a recorded webhook fixture body by basename. */
-pub fn fixture_body(fs: HarnessFs, name) {
+pub fn fixture_body(fs: HarnessFs, name: any) {
   return fs.read_text(fs.source_dir() + "/fixtures/webhooks/" + name + ".json")
 }
 
@@ -43,12 +43,17 @@ pub fn fixture_body(fs: HarnessFs, name) {
  * the F6 freshness check accepts it. Use this in assertions that expect
  * the unmodified-fixture event payload (other than the timestamp field).
  */
-pub fn fixture_body_fresh(harness: {clock: HarnessClock, fs: HarnessFs}, name) {
+pub fn fixture_body_fresh(harness: {clock: HarnessClock, fs: HarnessFs}, name: any) {
   return refresh_body_timestamp(harness.clock, fixture_body(harness.fs, name))
 }
 
 /** Build a signed raw inbound webhook envelope from a recorded fixture. */
-pub fn fixture_raw(harness: {clock: HarnessClock, fs: HarnessFs}, name, secret, extra = nil) {
+pub fn fixture_raw(
+  harness: {clock: HarnessClock, fs: HarnessFs},
+  name: any,
+  secret: any,
+  extra: any = nil,
+) {
   return signed_raw(harness.clock, secret, fixture_body(harness.fs, name), extra)
 }
 
