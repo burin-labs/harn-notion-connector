@@ -8,7 +8,7 @@ import {
   notion_headers,
 } from "./helpers"
 
-pipeline default(harness: Harness) {
+pipeline test_normalize_smoke(harness: Harness) {
   const secret = "test-verification-token"
   assert_notion_interface(harness)
   const page = normalize_inbound(

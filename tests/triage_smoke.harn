@@ -50,7 +50,7 @@ fn task_page() {
   }
 }
 
-pipeline default(harness: Harness) {
+pipeline test_triage_smoke(harness: Harness) {
   harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
   const secret = "test-verification-token"
   const webhook = normalize_inbound(

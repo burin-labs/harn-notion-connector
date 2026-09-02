@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Repinned the runtime to Harn 0.10.127.
+- Renamed the five `tests/*_smoke.harn` entry pipelines from `default` to
+  unique `test_*` names. Harn discovers a test only from a `test_`-prefixed
+  pipeline name or an `@test` attribute, so all five smoke suites were
+  compiled and then skipped. `harn test tests/` ran zero cases while still
+  reporting five discovered files, and `harn package verify` passed
+  vacuously until Harn 0.10.126 began reporting an empty selection as a
+  program failure.
 - Repinned the runtime to Harn 0.10.53 and completed the typed capability
   cutover. Every connector runtime export — `init`, `activate`, `shutdown`,
   `normalize_inbound`, `call`, `poll_tick` — now takes the root `Harness` as

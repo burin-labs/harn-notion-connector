@@ -1,7 +1,7 @@
 import { artifact_export_request, artifact_import_request, call, init, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 
-pipeline default(harness: Harness) {
+pipeline test_call_smoke(harness: Harness) {
   harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
   shutdown(harness)
   const normalized = init(harness, "invalid-context")
