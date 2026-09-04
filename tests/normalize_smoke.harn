@@ -1,12 +1,12 @@
 import { normalize_inbound, shutdown } from "../src/lib"
-import { expect, expect_eq } from "./assertions"
+import { expect, expect_eq } from "../testdata/assertions"
 import {
   assert_notion_interface,
   fixture_body,
   fixture_body_fresh,
   fixture_raw,
   notion_headers,
-} from "./helpers"
+} from "../testdata/helpers"
 
 pipeline test_normalize_smoke(harness: Harness) {
   const secret = "test-verification-token"
