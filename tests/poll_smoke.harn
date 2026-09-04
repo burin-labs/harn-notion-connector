@@ -1,5 +1,5 @@
 import { init, poll_tick, shutdown } from "../src/lib"
-import { expect, expect_eq } from "./assertions"
+import { expect, expect_eq } from "../testdata/assertions"
 
 fn poll_ctx(cursor: any = nil, state: any = nil, extra: any = nil) {
   return {

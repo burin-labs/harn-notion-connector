@@ -1,6 +1,6 @@
 import { call, init, method_capabilities, normalize_inbound, poll_tick, shutdown } from "../src/lib"
-import { expect, expect_eq } from "./assertions"
-import { fixture_raw } from "./helpers"
+import { expect, expect_eq } from "../testdata/assertions"
+import { fixture_raw } from "../testdata/helpers"
 
 fn poll_ctx() {
   return {

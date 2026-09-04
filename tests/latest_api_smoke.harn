@@ -1,5 +1,5 @@
 import { call, init, shutdown } from "../src/lib"
-import { expect, expect_eq } from "./assertions"
+import { expect, expect_eq } from "../testdata/assertions"
 
 pipeline test_latest_api_smoke(harness: Harness) {
   harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
