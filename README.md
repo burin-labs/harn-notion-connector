@@ -193,6 +193,19 @@ normalized payload shape and dedupe key as webhook-ingested Notion events.
 
 ### Required secrets
 
+The package declares these credentials independently at the Harn manifest
+boundary:
+
+- `notion/api-token` is outbound. `harn connect status --connector notion`
+  requires it for API calls and polling, and also recognizes `NOTION_TOKEN` for
+  local development.
+- `notion/verification-token` is inbound. It is required only when verifying
+  signed webhook deliveries and does not block outbound readiness.
+
+An outbound-only installation can therefore call the Pages and Data Sources
+APIs without configuring webhook ingress. An inbound-only installation can
+verify webhooks without granting the connector authority to call Notion APIs.
+
 For inbound webhooks, store the Notion webhook `verification_token` captured
 during subscription verification and pass it through the trigger binding as
 `secrets.verification_token`:
