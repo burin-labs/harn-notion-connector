@@ -193,6 +193,23 @@ normalized payload shape and dedupe key as webhook-ingested Notion events.
 
 ### Required secrets
 
+The connector requires two secrets, and they are independent. The manifest
+declares each one's direction of trust, so an installation that needs only one
+of the two surfaces stores only that surface's secret:
+
+| Secret | Direction | Needed for |
+| --- | --- | --- |
+| `notion/api-token` | `outbound` | Outbound API calls and polling |
+| `notion/verification-token` | `inbound` | Verifying signed webhook deliveries |
+
+`harn connect status --connector notion --json` reports outbound readiness. An
+installation with a valid `notion/api-token` and no verification token is
+usable for outbound calls and polling; it simply cannot verify signed webhooks.
+Storing a verification token does not substitute for the API token, and the two
+are never shared.
+
+#### Inbound: signed webhooks
+
 For inbound webhooks, store the Notion webhook `verification_token` captured
 during subscription verification and pass it through the trigger binding as
 `secrets.verification_token`:
@@ -210,6 +227,8 @@ path = "/hooks/notion"
 [triggers.secrets]
 verification_token = "notion/verification-token"
 ```
+
+#### Outbound: API calls and polling
 
 For outbound calls and polling, store a Notion internal integration token or
 OAuth access token and pass it as `api_token`, `token`, or

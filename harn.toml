@@ -25,7 +25,13 @@ token_endpoint_auth_method = "client_secret_basic"
 [providers.setup]
 auth_type = "oauth2"
 flow = "oauth2"
-required_secrets = ["notion/api-token", "notion/verification-token"]
+required_secrets = [
+  # Outbound calls and polling authenticate with the integration token.
+  { id = "notion/api-token", direction = "outbound" },
+  # Signed webhook deliveries are verified with the subscription's
+  # verification token before their payload enters the connector.
+  { id = "notion/verification-token", direction = "inbound" },
+]
 setup_command = ["harn", "connect", "notion"]
 validation_command = ["harn", "connect", "status", "--connector", "notion", "--json"]
 
@@ -40,7 +46,7 @@ kind = "secret"
 secret = "notion/verification-token"
 
 [providers.setup.recovery]
-missing_auth = "Store notion/api-token and notion/verification-token before enabling Notion bindings."
+missing_auth = "Store notion/api-token before enabling outbound Notion calls or polling. Signed webhook verification separately requires notion/verification-token."
 expired_credentials = "Refresh the OAuth token or rotate the internal integration token, then rerun validation."
 revoked_credentials = "Replace notion/api-token with an active Notion OAuth or internal integration token."
 missing_scopes = "Grant page, database, block, comment, or user capabilities required by the configured workflows."
