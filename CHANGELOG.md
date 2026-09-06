@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Declared each required secret's direction of trust in `harn.toml`.
+  `notion/api-token` is `outbound` and `notion/verification-token` is
+  `inbound`. Under the legacy undirected form Harn replayed both as outbound,
+  so `harn connect status --connector notion --json` reported an installation
+  with a valid API token and no webhook verification token as
+  `missing_auth`/unusable. That installation is now `healthy`, and signed
+  webhook verification remains a separate requirement. Added
+  `tests/manifest_secret_directions.harn`, which fails if the manifest returns
+  to the bare-string form.
+
 - Repinned the runtime to Harn 0.10.127.
 - Renamed the five `tests/*_smoke.harn` entry pipelines from `default` to
   unique `test_*` names. Harn discovers a test only from a `test_`-prefixed
