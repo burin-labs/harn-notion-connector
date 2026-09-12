@@ -13,7 +13,7 @@ pipeline test_normalize_smoke(harness: Harness) {
   assert_notion_interface(harness)
   const page = normalize_inbound(
     harness,
-    fixture_raw({clock: harness.clock, fs: harness.fs}, "page_content_updated", secret),
+    fixture_raw(pick(harness, ["clock", "fs"]), "page_content_updated", secret),
   )
   expect_eq(page.type, "event", "page envelope type")
   expect_eq(page.event.kind, "page.content_updated", "page event kind")
@@ -34,10 +34,7 @@ pipeline test_normalize_smoke(harness: Harness) {
   // the exact value.
   expect(page.event.payload.occurred_at != nil, "page occurred_at populated")
   expect(page.event.dedupe_key != "" && page.event.dedupe_key != nil, "page dedupe key populated")
-  const fresh_body = fixture_body_fresh(
-    {clock: harness.clock, fs: harness.fs},
-    "page_content_updated",
-  )
+  const fresh_body = fixture_body_fresh(pick(harness, ["clock", "fs"]), "page_content_updated")
   const raw_body = normalize_inbound(
     harness,
     {
@@ -50,7 +47,7 @@ pipeline test_normalize_smoke(harness: Harness) {
   expect_eq(raw_body.event.kind, "page.content_updated", "raw_body event kind")
   const database = normalize_inbound(
     harness,
-    fixture_raw({clock: harness.clock, fs: harness.fs}, "database_created", secret),
+    fixture_raw(pick(harness, ["clock", "fs"]), "database_created", secret),
   )
   expect_eq(database.event.kind, "database.created", "database event kind")
   expect_eq(database.event.payload.event, "database.created", "database provider payload event")
@@ -60,7 +57,7 @@ pipeline test_normalize_smoke(harness: Harness) {
   expect_eq(database.event.payload.parent_id, "page_home", "database parent id")
   const comment = normalize_inbound(
     harness,
-    fixture_raw({clock: harness.clock, fs: harness.fs}, "comment_created", secret),
+    fixture_raw(pick(harness, ["clock", "fs"]), "comment_created", secret),
   )
   expect_eq(comment.event.kind, "comment.created", "comment event kind")
   expect_eq(comment.event.payload.event, "comment.created", "comment provider payload event")
@@ -164,7 +161,7 @@ pipeline test_normalize_smoke(harness: Harness) {
   const oversized_result = normalize_inbound(harness, {body_text: oversized_body, headers: {}})
   expect_eq(oversized_result.type, "reject", "F5: oversized verification_token rejects")
   // F5: generic signed events must NOT carry verification_token through.
-  const fresh = fixture_body_fresh({clock: harness.clock, fs: harness.fs}, "page_content_updated")
+  const fresh = fixture_body_fresh(pick(harness, ["clock", "fs"]), "page_content_updated")
   const signed_with_token_body = json_stringify(
     json_parse(fresh) + {verification_token: "should-not-surface"},
   )
