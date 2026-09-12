@@ -477,15 +477,15 @@ pub fn call(harness: Harness, method: any, args: any = {}) {
     )
   }
   if method == "artifact.export_request" {
-    return artifact_export_request({env: harness.env, secrets: harness.secrets}, args ?? {})
+    return artifact_export_request(pick(harness, ["env", "secrets"]), args ?? {})
   }
   if method == "artifact.import_request" {
-    return artifact_import_request({env: harness.env, secrets: harness.secrets}, args ?? {})
+    return artifact_import_request(pick(harness, ["env", "secrets"]), args ?? {})
   }
   if to_string(method).starts_with("oauth.") {
     return __oauth_call(harness, method, args ?? {})
   }
-  const config = __outbound_config({env: harness.env, secrets: harness.secrets}, args ?? {})
+  const config = __outbound_config(pick(harness, ["env", "secrets"]), args ?? {})
   if is_err(config) {
     return config
   }
@@ -2558,7 +2558,7 @@ fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args: any
  * rather than widened to match.
  */
 fn __oauth_call(harness: Harness, method: any, args: any) {
-  const config = __oauth_config({env: harness.env, secrets: harness.secrets}, args ?? {})
+  const config = __oauth_config(pick(harness, ["env", "secrets"]), args ?? {})
   if is_err(config) {
     return config
   }

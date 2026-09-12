@@ -55,7 +55,7 @@ pipeline test_triage_smoke(harness: Harness) {
   const secret = "test-verification-token"
   const webhook = normalize_inbound(
     harness,
-    fixture_raw({clock: harness.clock, fs: harness.fs}, "page_task_updated", secret),
+    fixture_raw(pick(harness, ["clock", "fs"]), "page_task_updated", secret),
   )
   expect_eq(webhook.type, "event", "webhook triage fixture emits event")
   const triage = webhook.event.payload.triage
@@ -94,7 +94,7 @@ pipeline test_triage_smoke(harness: Harness) {
   expect_eq(triage.action_intents[3].requires_approval, true, "follow-up write requires approval")
   const database = normalize_inbound(
     harness,
-    fixture_raw({clock: harness.clock, fs: harness.fs}, "database_created", secret),
+    fixture_raw(pick(harness, ["clock", "fs"]), "database_created", secret),
   )
   expect_eq(database.event.payload.triage.source.kind, "database", "database source kind")
   expect_eq(
@@ -114,7 +114,7 @@ pipeline test_triage_smoke(harness: Harness) {
   )
   const comment = normalize_inbound(
     harness,
-    fixture_raw({clock: harness.clock, fs: harness.fs}, "comment_created", secret),
+    fixture_raw(pick(harness, ["clock", "fs"]), "comment_created", secret),
   )
   expect_eq(comment.event.payload.triage.source.kind, "comment", "comment source kind")
   expect_eq(

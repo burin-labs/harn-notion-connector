@@ -108,7 +108,7 @@ pipeline test_call_smoke(harness: Harness) {
   expect(is_err(unapproved_api_call), "write-like api_call requires approval")
   expect_eq(unwrap_err(unapproved_api_call).code, "approval_required", "api_call approval code")
   const page_export = artifact_export_request(
-    {env: harness.env, secrets: harness.secrets},
+    pick(harness, ["env", "secrets"]),
     {page_id: "page_123", format: "page", name: "report.json"},
   )
   expect_eq(page_export.kind, "artifact_export", "page export descriptor kind")
@@ -123,19 +123,19 @@ pipeline test_call_smoke(harness: Harness) {
   expect_eq(block_export.url, base + "/blocks/page_123/children", "block export URL")
   expect_eq(block_export.query.page_size, 25, "block export page size")
   const file_export = artifact_export_request(
-    {env: harness.env, secrets: harness.secrets},
+    pick(harness, ["env", "secrets"]),
     {file_url: "https://secure.notion-static.com/report.pdf", name: "report.pdf"},
   )
   expect_eq(file_export.url, "https://secure.notion-static.com/report.pdf", "file URL export")
   expect_eq(file_export.artifact.mime_type, "application/pdf", "file MIME inferred")
   const pdf_export = artifact_export_request(
-    {env: harness.env, secrets: harness.secrets},
+    pick(harness, ["env", "secrets"]),
     {page_id: "page_123", format: "pdf"},
   )
   expect(is_err(pdf_export), "Notion page PDF export is unsupported")
   expect_eq(unwrap_err(pdf_export).code, "unsupported_pdf_export", "Notion PDF export code")
   const create_import = artifact_import_request(
-    {env: harness.env, secrets: harness.secrets},
+    pick(harness, ["env", "secrets"]),
     {
       mode: "create_page",
       parent: {page_id: "parent_123"},
@@ -166,7 +166,7 @@ pipeline test_call_smoke(harness: Harness) {
   expect_eq(append_import.url, base + "/blocks/page_123/children", "append import URL")
   expect_eq(len(append_import.body.children), 1, "append import children")
   const file_import = artifact_import_request(
-    {env: harness.env, secrets: harness.secrets},
+    pick(harness, ["env", "secrets"]),
     {
       mode: "external_file",
       filename: "report.pdf",
