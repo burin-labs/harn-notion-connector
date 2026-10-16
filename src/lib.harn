@@ -467,7 +467,6 @@ fn __notion_freshness_check(clock: HarnessClock, payload: any) {
   return Ok(true)
 }
 
-@complexity(allow)
 /** Dispatch a supported Notion API method with explicit method-to-path mapping. */
 pub fn call(harness: Harness, method: any, args: any = {}) {
   if !contains(NOTION_OUTBOUND_METHODS, method) {
@@ -493,6 +492,7 @@ pub fn call(harness: Harness, method: any, args: any = {}) {
   return __sdk_call(pick(harness, ["clock", "net"]), method, args, cfg)
 }
 
+@complexity(allow)
 fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args: any, cfg: any) {
   if method == "blocks.retrieve" {
     const block_id = __required_id(args, "block_id", "blocks.retrieve")
