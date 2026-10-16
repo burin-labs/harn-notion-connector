@@ -490,6 +490,10 @@ pub fn call(harness: Harness, method: any, args: any = {}) {
     return config
   }
   const cfg = unwrap(config)
+  return __sdk_call(pick(harness, ["clock", "net"]), method, args, cfg)
+}
+
+fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args: any, cfg: any) {
   if method == "blocks.retrieve" {
     const block_id = __required_id(args, "block_id", "blocks.retrieve")
     if is_err(block_id) {
@@ -1113,7 +1117,7 @@ pub fn artifact_export_request(
       method: "GET",
       url: to_string(direct_file_url),
       artifact: {
-        uri: args?.uri ?? ("notion://files/" + url_encode(name)),
+        uri: args?.uri ?? "notion://files/" + url_encode(name),
         name: name,
         mime_type: to_string(args?.mime_type ?? args?.content_type ?? __mime_type_from_name(name)),
         source_ref: __notion_ref("file", args?.file_upload_id ?? args?.file_id ?? name),
@@ -1134,7 +1138,7 @@ pub fn artifact_export_request(
       url: __notion_api_url(notion_cfg.api_base_url, "/pages/" + url_encode(to_string(page))),
       artifact: {
         uri: "notion://pages/" + to_string(page),
-        name: to_string(args?.name ?? ("notion-page-" + to_string(page) + ".json")),
+        name: to_string(args?.name ?? "notion-page-" + to_string(page) + ".json"),
         mime_type: "application/json",
         source_ref: __notion_ref("page", page),
       },
@@ -1153,7 +1157,7 @@ pub fn artifact_export_request(
       query: {page_size: args?.page_size ?? 100, start_cursor: args?.start_cursor},
       artifact: {
         uri: "notion://pages/" + to_string(page) + "/blocks",
-        name: to_string(args?.name ?? ("notion-page-" + to_string(page) + "-blocks.json")),
+        name: to_string(args?.name ?? "notion-page-" + to_string(page) + "-blocks.json"),
         mime_type: "application/json",
         source_ref: __notion_ref("page", page),
       },
@@ -1171,7 +1175,7 @@ pub fn artifact_export_request(
       ),
       artifact: {
         uri: "notion://pages/" + to_string(page) + "/markdown",
-        name: to_string(args?.name ?? ("notion-page-" + to_string(page) + ".md")),
+        name: to_string(args?.name ?? "notion-page-" + to_string(page) + ".md"),
         mime_type: "text/markdown",
         source_ref: __notion_ref("page", page),
       },
@@ -2553,9 +2557,8 @@ fn __oauth_config(harness: {env: HarnessEnv, secrets: HarnessSecrets}, args: any
 /**
  * Dispatch one `oauth.*` method against the SDK's generated OAuth operations.
  *
- * Takes the root harness because those operations do. `__oauth_config` reads
- * only env and secrets, so it keeps the narrow record and is attenuated here
- * rather than widened to match.
+ * Resolve credentials before attenuating to the generated SDK's clock and
+ * network capabilities.
  */
 fn __oauth_call(harness: Harness, method: any, args: any) {
   const config = __oauth_config(pick(harness, ["env", "secrets"]), args ?? {})
@@ -2563,6 +2566,15 @@ fn __oauth_call(harness: Harness, method: any, args: any) {
     return config
   }
   const cfg = unwrap(config)
+  return __oauth_sdk_call(pick(harness, ["clock", "net"]), method, args, cfg)
+}
+
+fn __oauth_sdk_call(
+  harness: {clock: HarnessClock, net: HarnessNet},
+  method: any,
+  args: any,
+  cfg: any,
+) {
   if method == "oauth.token.create" {
     const body = __oauth_call_body(args)
     const variant = if body?._variant != nil {
@@ -2691,8 +2703,8 @@ fn __notion_request(net: HarnessNet, method: any, url: any, body: any, cfg: any)
       status: http_response.status,
       code: payload?.code ?? "notion_error",
       message: payload?.message
-        ?? ("Notion API request failed with status "
-          + to_string(http_response.status)),
+        ?? "Notion API request failed with status "
+          + to_string(http_response.status),
       request_id: __response_request_id(response_headers),
     }
     const auth_scope_failure = __auth_scope_failure(http_response.status, err.code)

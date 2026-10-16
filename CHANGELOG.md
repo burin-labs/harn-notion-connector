@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Qualify independent outbound and webhook credential readiness through all
+  four combinations in the actual CLI, including explicit health checks.
+  Adopt the SDK's current-runtime API error fix and attenuate its capabilities
+  once at each dispatch boundary.
+
 - Declared each required secret's direction of trust in `harn.toml`.
   `notion/api-token` is `outbound` and `notion/verification-token` is
   `inbound`. Under the legacy undirected form Harn replayed both as outbound,

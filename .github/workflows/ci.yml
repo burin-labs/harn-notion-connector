@@ -16,10 +16,20 @@ jobs:
     with:
       run-poll-tick: true
 
+  readiness:
+    name: Independent credential readiness
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned Harn
+        uses: burin-labs/harn/.github/actions/setup-harn@11681af676a5e4dc4200cfee683150cdec26763f
+      - name: Check outbound and inbound credential controls
+        run: python3 tests/readiness_matrix.py
+
   ci-status:
     name: CI status
     if: ${{ always() }}
-    needs: [harn]
+    needs: [harn, readiness]
     runs-on: ubuntu-24.04
     steps:
       - name: Enforce required jobs
