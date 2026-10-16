@@ -40,7 +40,7 @@ pipeline test_call_smoke(harness: Harness) {
     },
   )
   const page = call(harness, "pages.retrieve", {page_id: "page_123"})
-  expect_eq(page.id, "page_123", "pages.retrieve response")
+  expect_eq(page.id, "page_123", "pages.retrieve response: " + to_string(page))
   const query = call(harness, "databases.query", {database_id: "db_123", page_size: 10})
   expect_eq(query.object, "list", "databases.query response")
   call(harness, "pages.create", {parent: {database_id: "db_123"}, properties: {Name: {title: []}}})
@@ -94,7 +94,11 @@ pipeline test_call_smoke(harness: Harness) {
   )
   const missing = call(harness, "pages.retrieve", {page_id: "missing"})
   expect(is_err(missing), "non-2xx response becomes Err")
-  expect_eq(unwrap_err(missing).code, "object_not_found", "NotionError code")
+  expect_eq(
+    unwrap_err(missing).code,
+    "object_not_found",
+    "NotionError code: " + to_string(unwrap_err(missing)),
+  )
   expect_eq(unwrap_err(missing).status, 404, "NotionError status")
   expect_eq(unwrap_err(missing).request_id, "req_404", "NotionError request id")
   const unsupported = call(harness, "workspaces.retrieve", {workspace_id: "workspace_1"})

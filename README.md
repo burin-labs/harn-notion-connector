@@ -293,6 +293,10 @@ connector hosts.
 
 ## Development
 
+Run `python3 tests/readiness_matrix.py` with the pinned Harn on `PATH` to
+check the four outbound and webhook credential combinations. The check uses
+isolated homes and synthetic credentials; it makes no Notion API calls.
+
 Use the pinned Harn CLI from the install step. Then run the local CI equivalent
 from this repo:
 
