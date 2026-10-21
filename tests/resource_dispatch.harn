@@ -1,0 +1,110 @@
+import { call, init, shutdown } from "../src/lib"
+import { expect, expect_eq } from "../testdata/assertions"
+import {
+  update_a_block_variant2,
+  update_a_comment_variant2,
+  update_page_markdown_insert_content,
+} from "notion-sdk-harn/default"
+
+pipeline test_resource_dispatch(harness: Harness) {
+  harness.net.egress_policy({allow: ["api.notion.com"], default: "deny"})
+  shutdown(harness)
+  init(harness, {api_token: "fixture-token", api_base_url: "https://api.notion.com/v1"})
+  const cases = [
+    ["blocks.retrieve", "block_id", "GET", "/blocks/", ""],
+    ["blocks.delete", "block_id", "DELETE", "/blocks/", ""],
+    ["databases.retrieve", "database_id", "GET", "/databases/", ""],
+    ["data_sources.retrieve", "data_source_id", "GET", "/data_sources/", ""],
+    ["comments.retrieve", "comment_id", "GET", "/comments/", ""],
+    ["comments.delete", "comment_id", "DELETE", "/comments/", ""],
+    ["file_uploads.retrieve", "file_upload_id", "GET", "/file_uploads/", ""],
+    ["file_uploads.complete", "file_upload_id", "POST", "/file_uploads/", "/complete"],
+    ["users.retrieve", "user_id", "GET", "/users/", ""],
+    ["views.retrieve", "view_id", "GET", "/views/", ""],
+    ["views.delete", "view_id", "DELETE", "/views/", ""],
+    ["blocks.update", "block_id", "PATCH", "/blocks/", ""],
+    ["pages.update", "page_id", "PATCH", "/pages/", ""],
+    ["pages.markdown.update", "page_id", "PATCH", "/pages/", "/markdown"],
+    ["pages.move", "page_id", "POST", "/pages/", "/move"],
+    ["databases.update", "database_id", "PATCH", "/databases/", ""],
+    ["data_sources.update", "data_source_id", "PATCH", "/data_sources/", ""],
+    ["comments.update", "comment_id", "PATCH", "/comments/", ""],
+    ["file_uploads.send", "file_upload_id", "POST", "/file_uploads/", "/send"],
+    ["views.update", "view_id", "PATCH", "/views/", ""],
+    ["views.queries.create", "view_id", "POST", "/views/", "/queries"],
+  ]
+  for item in cases {
+    const method = to_string(item[0])
+    const field = to_string(item[1])
+    const url = "https://api.notion.com/v1" + to_string(item[3]) + "resource%2F123"
+      + to_string(item[4])
+    const payload = {
+      "blocks.update": update_a_block_variant2(true),
+      "comments.update": update_a_comment_variant2("Kept"),
+      "pages.markdown.update": update_page_markdown_insert_content({content: "Kept"}),
+    }
+      .get(method)
+      ?? {name: "Kept"}
+    let expected_body = {}
+    for entry in payload.entries() {
+      if entry.key != "_variant" {
+        expected_body[entry.key] = entry.value
+      }
+    }
+    harness.testing.http_mock_clear()
+    harness.testing.http_mock(
+      "*",
+      "https://api.notion.com/v1/*",
+      {status: 200, body: "{\"id\":\"received\"}"},
+    )
+    const args = {[field]: "resource/123", id: "ignored", ...payload}
+    expect_eq(call(harness, method, args).id, "received", method + " response")
+    const requests = harness.testing.http_mock_calls()
+    expect_eq(len(requests), 1, method + " request count")
+    expect_eq(requests[0].method, item[2], method + " HTTP method")
+    expect_eq(requests[0].url, url, method + " path and identifier precedence")
+    if item[2] == "PATCH" || method == "pages.move" || method == "views.queries.create"
+      || method == "file_uploads.send" {
+      expect_eq(json_parse(requests[0].body), expected_body, method + " body")
+    }
+    expect_eq(
+      call(harness, method, {id: "resource/123", ...payload}).id,
+      "received",
+      method + " id alias",
+    )
+    const alias_requests = harness.testing.http_mock_calls()
+    expect_eq(alias_requests[1].url, url, method + " alias path")
+    if item[2] == "PATCH" || method == "pages.move" || method == "views.queries.create"
+      || method == "file_uploads.send" {
+      expect_eq(
+        json_parse(alias_requests[1].body),
+        expected_body,
+        method + " flat body excludes path ids",
+      )
+    }
+    for invalid in [{}, {[field]: ""}, {[field]: "  ", id: "ignored"}] {
+      const rejected = call(harness, method, invalid)
+      expect(is_err(rejected), method + " rejects missing or blank identifier")
+      expect_eq(unwrap_err(rejected).code, "invalid_args", method + " invalid argument code")
+      expect_eq(unwrap_err(rejected).message, method + " requires " + field, method + " diagnostic")
+    }
+    expect_eq(len(harness.testing.http_mock_calls()), 2, method + " invalid ids do not dispatch")
+    harness.testing.http_mock_clear()
+    harness.testing.http_mock(
+      "*",
+      "https://api.notion.com/v1/*",
+      {
+        status: 404,
+        body: "{\"code\":\"object_not_found\",\"message\":\"Missing resource\"}",
+        headers: {"x-request-id": "fixture-request"},
+      },
+    )
+    const failed = call(harness, method, {[field]: "missing", ...payload})
+    expect(is_err(failed), method + " HTTP failure becomes Err")
+    expect_eq(unwrap_err(failed).code, "object_not_found", method + " provider error code")
+    expect_eq(unwrap_err(failed).status, 404, method + " provider status")
+    expect_eq(unwrap_err(failed).request_id, "fixture-request", method + " provider request id")
+  }
+  harness.testing.http_mock_clear()
+  shutdown(harness)
+}
