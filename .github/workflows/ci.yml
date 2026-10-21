@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Install pinned Harn
-        uses: burin-labs/harn/.github/actions/setup-harn@11681af676a5e4dc4200cfee683150cdec26763f
+        uses: burin-labs/harn/.github/actions/setup-harn@81abb4545d53a9e4d3acf0fe5b4598535dc4a165
       - name: Check outbound and inbound credential controls
         run: python3 tests/readiness_matrix.py
 
