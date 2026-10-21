@@ -494,41 +494,57 @@ pub fn call(harness: Harness, method: any, args: any = {}) {
 
 @complexity(allow)
 fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args: any, cfg: any) {
-  if method == "blocks.retrieve" {
-    const block_id = __required_id(args, "block_id", "blocks.retrieve")
-    if is_err(block_id) {
-      return block_id
+  const resource_call = {
+    "blocks.retrieve": {id_field: "block_id", run: retrieve_a_block},
+    "blocks.delete": {id_field: "block_id", run: delete_a_block},
+    "databases.retrieve": {id_field: "database_id", run: retrieve_database},
+    "data_sources.retrieve": {id_field: "data_source_id", run: retrieve_a_data_source},
+    "comments.retrieve": {id_field: "comment_id", run: retrieve_comment},
+    "comments.delete": {id_field: "comment_id", run: delete_a_comment},
+    "file_uploads.retrieve": {id_field: "file_upload_id", run: retrieve_file_upload},
+    "file_uploads.complete": {id_field: "file_upload_id", run: complete_file_upload},
+    "users.retrieve": {id_field: "user_id", run: get_user},
+    "views.retrieve": {id_field: "view_id", run: retrieve_a_view},
+    "views.delete": {id_field: "view_id", run: delete_view},
+  }
+    .get(method)
+  if resource_call != nil {
+    const id = __required_id(args, resource_call.id_field, method)
+    if is_err(id) {
+      return id
     }
     return __sdk_result(
       try {
-        retrieve_a_block(harness, __sdk_client(cfg), unwrap(block_id))
+        resource_call.run(harness, __sdk_client(cfg), unwrap(id))
       },
     )
   }
-  if method == "blocks.update" {
-    const block_id = __required_id(args, "block_id", "blocks.update")
-    if is_err(block_id) {
-      return block_id
+  const resource_body_call = {
+    "blocks.update": {id_field: "block_id", run: update_a_block},
+    "pages.update": {id_field: "page_id", run: patch_page},
+    "pages.markdown.update": {id_field: "page_id", run: update_page_markdown},
+    "pages.move": {id_field: "page_id", run: move_page},
+    "databases.update": {id_field: "database_id", run: update_database},
+    "data_sources.update": {id_field: "data_source_id", run: update_a_data_source},
+    "comments.update": {id_field: "comment_id", run: update_a_comment},
+    "file_uploads.send": {id_field: "file_upload_id", run: upload_file},
+    "views.update": {id_field: "view_id", run: update_a_view},
+    "views.queries.create": {id_field: "view_id", run: create_view_query},
+  }
+    .get(method)
+  if resource_body_call != nil {
+    const id = __required_id(args, resource_body_call.id_field, method)
+    if is_err(id) {
+      return id
     }
     return __sdk_result(
       try {
-        update_a_block(
+        resource_body_call.run(
           harness,
           __sdk_client(cfg),
-          unwrap(block_id),
-          __call_body(args, ["block_id", "id"]),
+          unwrap(id),
+          __call_body(args, [resource_body_call.id_field, "id"]),
         )
-      },
-    )
-  }
-  if method == "blocks.delete" {
-    const block_id = __required_id(args, "block_id", "blocks.delete")
-    if is_err(block_id) {
-      return block_id
-    }
-    return __sdk_result(
-      try {
-        delete_a_block(harness, __sdk_client(cfg), unwrap(block_id))
       },
     )
   }
@@ -567,22 +583,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
       },
     )
   }
-  if method == "pages.update" {
-    const page_id = __required_id(args, "page_id", "pages.update")
-    if is_err(page_id) {
-      return page_id
-    }
-    return __sdk_result(
-      try {
-        patch_page(
-          harness,
-          __sdk_client(cfg),
-          unwrap(page_id),
-          __call_body(args, ["page_id", "id"]),
-        )
-      },
-    )
-  }
   if method == "pages.markdown.retrieve" {
     const page_id = __required_id(args, "page_id", "pages.markdown.retrieve")
     if is_err(page_id) {
@@ -596,33 +596,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
           unwrap(page_id),
           args?.include_transcript,
         )
-      },
-    )
-  }
-  if method == "pages.markdown.update" {
-    const page_id = __required_id(args, "page_id", "pages.markdown.update")
-    if is_err(page_id) {
-      return page_id
-    }
-    return __sdk_result(
-      try {
-        update_page_markdown(
-          harness,
-          __sdk_client(cfg),
-          unwrap(page_id),
-          __call_body(args, ["page_id", "id"]),
-        )
-      },
-    )
-  }
-  if method == "pages.move" {
-    const page_id = __required_id(args, "page_id", "pages.move")
-    if is_err(page_id) {
-      return page_id
-    }
-    return __sdk_result(
-      try {
-        move_page(harness, __sdk_client(cfg), unwrap(page_id), __call_body(args, ["page_id", "id"]))
       },
     )
   }
@@ -655,33 +628,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
       },
     )
   }
-  if method == "databases.retrieve" {
-    const database_id = __required_id(args, "database_id", "databases.retrieve")
-    if is_err(database_id) {
-      return database_id
-    }
-    return __sdk_result(
-      try {
-        retrieve_database(harness, __sdk_client(cfg), unwrap(database_id))
-      },
-    )
-  }
-  if method == "databases.update" {
-    const database_id = __required_id(args, "database_id", "databases.update")
-    if is_err(database_id) {
-      return database_id
-    }
-    return __sdk_result(
-      try {
-        update_database(
-          harness,
-          __sdk_client(cfg),
-          unwrap(database_id),
-          __call_body(args, ["database_id", "id"]),
-        )
-      },
-    )
-  }
   if method == "databases.query" {
     const database_id = __required_id(args, "database_id", "databases.query")
     if is_err(database_id) {
@@ -702,33 +648,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
     return __sdk_result(
       try {
         create_a_database(harness, __sdk_client(cfg), __call_body(args))
-      },
-    )
-  }
-  if method == "data_sources.retrieve" {
-    const data_source_id = __required_id(args, "data_source_id", "data_sources.retrieve")
-    if is_err(data_source_id) {
-      return data_source_id
-    }
-    return __sdk_result(
-      try {
-        retrieve_a_data_source(harness, __sdk_client(cfg), unwrap(data_source_id))
-      },
-    )
-  }
-  if method == "data_sources.update" {
-    const data_source_id = __required_id(args, "data_source_id", "data_sources.update")
-    if is_err(data_source_id) {
-      return data_source_id
-    }
-    return __sdk_result(
-      try {
-        update_a_data_source(
-          harness,
-          __sdk_client(cfg),
-          unwrap(data_source_id),
-          __call_body(args, ["data_source_id", "id"]),
-        )
       },
     )
   }
@@ -819,44 +738,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
       },
     )
   }
-  if method == "comments.retrieve" {
-    const comment_id = __required_id(args, "comment_id", "comments.retrieve")
-    if is_err(comment_id) {
-      return comment_id
-    }
-    return __sdk_result(
-      try {
-        retrieve_comment(harness, __sdk_client(cfg), unwrap(comment_id))
-      },
-    )
-  }
-  if method == "comments.update" {
-    const comment_id = __required_id(args, "comment_id", "comments.update")
-    if is_err(comment_id) {
-      return comment_id
-    }
-    return __sdk_result(
-      try {
-        update_a_comment(
-          harness,
-          __sdk_client(cfg),
-          unwrap(comment_id),
-          __call_body(args, ["comment_id", "id"]),
-        )
-      },
-    )
-  }
-  if method == "comments.delete" {
-    const comment_id = __required_id(args, "comment_id", "comments.delete")
-    if is_err(comment_id) {
-      return comment_id
-    }
-    return __sdk_result(
-      try {
-        delete_a_comment(harness, __sdk_client(cfg), unwrap(comment_id))
-      },
-    )
-  }
   if method == "custom_emojis.list" {
     return __sdk_result(
       try {
@@ -890,44 +771,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
       },
     )
   }
-  if method == "file_uploads.retrieve" {
-    const file_upload_id = __required_id(args, "file_upload_id", "file_uploads.retrieve")
-    if is_err(file_upload_id) {
-      return file_upload_id
-    }
-    return __sdk_result(
-      try {
-        retrieve_file_upload(harness, __sdk_client(cfg), unwrap(file_upload_id))
-      },
-    )
-  }
-  if method == "file_uploads.complete" {
-    const file_upload_id = __required_id(args, "file_upload_id", "file_uploads.complete")
-    if is_err(file_upload_id) {
-      return file_upload_id
-    }
-    return __sdk_result(
-      try {
-        complete_file_upload(harness, __sdk_client(cfg), unwrap(file_upload_id))
-      },
-    )
-  }
-  if method == "file_uploads.send" {
-    const file_upload_id = __required_id(args, "file_upload_id", "file_uploads.send")
-    if is_err(file_upload_id) {
-      return file_upload_id
-    }
-    return __sdk_result(
-      try {
-        upload_file(
-          harness,
-          __sdk_client(cfg),
-          unwrap(file_upload_id),
-          __call_body(args, ["file_upload_id", "id"]),
-        )
-      },
-    )
-  }
   if method == "users.list" {
     return __sdk_result(
       try {
@@ -939,17 +782,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
     return __sdk_result(
       try {
         get_self(harness, __sdk_client(cfg))
-      },
-    )
-  }
-  if method == "users.retrieve" {
-    const user_id = __required_id(args, "user_id", "users.retrieve")
-    if is_err(user_id) {
-      return user_id
-    }
-    return __sdk_result(
-      try {
-        get_user(harness, __sdk_client(cfg), unwrap(user_id))
       },
     )
   }
@@ -971,60 +803,6 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
     return __sdk_result(
       try {
         create_view(harness, __sdk_client(cfg), __call_body(args))
-      },
-    )
-  }
-  if method == "views.retrieve" {
-    const view_id = __required_id(args, "view_id", "views.retrieve")
-    if is_err(view_id) {
-      return view_id
-    }
-    return __sdk_result(
-      try {
-        retrieve_a_view(harness, __sdk_client(cfg), unwrap(view_id))
-      },
-    )
-  }
-  if method == "views.update" {
-    const view_id = __required_id(args, "view_id", "views.update")
-    if is_err(view_id) {
-      return view_id
-    }
-    return __sdk_result(
-      try {
-        update_a_view(
-          harness,
-          __sdk_client(cfg),
-          unwrap(view_id),
-          __call_body(args, ["view_id", "id"]),
-        )
-      },
-    )
-  }
-  if method == "views.delete" {
-    const view_id = __required_id(args, "view_id", "views.delete")
-    if is_err(view_id) {
-      return view_id
-    }
-    return __sdk_result(
-      try {
-        delete_view(harness, __sdk_client(cfg), unwrap(view_id))
-      },
-    )
-  }
-  if method == "views.queries.create" {
-    const view_id = __required_id(args, "view_id", "views.queries.create")
-    if is_err(view_id) {
-      return view_id
-    }
-    return __sdk_result(
-      try {
-        create_view_query(
-          harness,
-          __sdk_client(cfg),
-          unwrap(view_id),
-          __call_body(args, ["view_id", "id"]),
-        )
       },
     )
   }
