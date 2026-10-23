@@ -45,12 +45,6 @@ pipeline test_resource_dispatch(harness: Harness) {
     }
       .get(method)
       ?? {name: "Kept"}
-    let expected_body = {}
-    for entry in payload.entries() {
-      if entry.key != "_variant" {
-        expected_body[entry.key] = entry.value
-      }
-    }
     harness.testing.http_mock_clear()
     harness.testing.http_mock(
       "*",
@@ -65,7 +59,7 @@ pipeline test_resource_dispatch(harness: Harness) {
     expect_eq(requests[0].url, url, method + " path and identifier precedence")
     if item[2] == "PATCH" || method == "pages.move" || method == "views.queries.create"
       || method == "file_uploads.send" {
-      expect_eq(json_parse(requests[0].body), expected_body, method + " body")
+      expect_eq(json_parse(requests[0].body), payload, method + " body")
     }
     expect_eq(
       call(harness, method, {id: "resource/123", ...payload}).id,
@@ -78,7 +72,7 @@ pipeline test_resource_dispatch(harness: Harness) {
       || method == "file_uploads.send" {
       expect_eq(
         json_parse(alias_requests[1].body),
-        expected_body,
+        payload,
         method + " flat body excludes path ids",
       )
     }

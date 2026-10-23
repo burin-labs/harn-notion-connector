@@ -2,10 +2,6 @@ import {
   AdapterClient,
   complete_file_upload,
   create_a_comment,
-  create_a_comment_variant1,
-  create_a_comment_variant2,
-  create_a_comment_variant3,
-  create_a_comment_variant4,
   create_a_database,
   create_a_token,
   create_a_token_variant1,
@@ -710,19 +706,9 @@ fn __sdk_call(harness: {clock: HarnessClock, net: HarnessNet}, method: any, args
     )
   }
   if method == "comments.create" {
-    const body = __call_body(args)
-    const variant = if body?.discussion_id != nil && body?.markdown != nil {
-      create_a_comment_variant4(body.discussion_id, body.markdown)
-    } else if body?.markdown != nil {
-      create_a_comment_variant2(body.markdown, body?.parent ?? {})
-    } else if body?.discussion_id != nil {
-      create_a_comment_variant3(body.discussion_id, body?.rich_text ?? [])
-    } else {
-      create_a_comment_variant1(body?.parent ?? {}, body?.rich_text ?? [])
-    }
     return __sdk_result(
       try {
-        create_a_comment(harness, __sdk_client(cfg), variant)
+        create_a_comment(harness, __sdk_client(cfg), __call_body(args))
       },
     )
   }
@@ -2356,7 +2342,7 @@ fn __oauth_sdk_call(
 ) {
   if method == "oauth.token.create" {
     const body = __oauth_call_body(args)
-    const variant = if body?._variant != nil {
+    const payload = if body?.grant_type != nil {
       body
     } else if body?.refresh_token != nil {
       create_a_token_variant2(body.refresh_token)
@@ -2367,7 +2353,7 @@ fn __oauth_sdk_call(
     }
     return __sdk_result(
       try {
-        create_a_token(harness, __oauth_client(cfg), variant)
+        create_a_token(harness, __oauth_client(cfg), payload)
       },
     )
   }

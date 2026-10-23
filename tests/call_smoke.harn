@@ -50,7 +50,13 @@ pipeline test_call_smoke(harness: Harness) {
     "search.query",
     {query: "task", page_size: 25, start_cursor: "cursor_a", api_token: "secret_api"},
   )
-  call(harness, "comments.create", {discussion_id: "discussion_123", markdown: "Follow up"})
+  const comment_input = {
+    discussion_id: "discussion_123",
+    markdown: "Follow up",
+    attachments: [{type: "file_upload", file_upload_id: "upload_123"}],
+    display_name: {type: "integration"},
+  }
+  call(harness, "comments.create", comment_input)
   const calls = harness.testing.http_mock_calls()
   expect_eq(len(calls), 6, "all expected outbound methods dispatched")
   expect_eq(calls[0].method, "GET", "retrieve uses GET")
@@ -70,18 +76,7 @@ pipeline test_call_smoke(harness: Harness) {
   expect_eq(search_body.get("page_size"), 25, "search body keeps pagination page size")
   expect_eq(search_body.get("start_cursor"), "cursor_a", "search body keeps pagination cursor")
   expect_eq(search_body.get("api_token"), nil, "search auth token is not leaked into body")
-  const comment_body = json_parse(calls[5].body)
-  expect_eq(
-    comment_body.get("discussion_id"),
-    "discussion_123",
-    "discussion markdown comment uses discussion id",
-  )
-  expect_eq(comment_body.get("markdown"), "Follow up", "discussion markdown comment keeps markdown")
-  expect_eq(
-    comment_body.get("parent"),
-    nil,
-    "discussion markdown comment does not synthesize an empty parent",
-  )
+  expect_eq(json_parse(calls[5].body), comment_input, "comment fields forwarded unchanged")
   harness.testing.http_mock_clear()
   harness.testing.http_mock(
     "GET",
